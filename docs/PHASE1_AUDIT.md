@@ -132,6 +132,15 @@ Browser → Next.js (RSC + client islands) → API Routes → [Memory | OpenAI |
 - [x] **A.5 RLS Policies** — Expanded `supabase/schema.sql` with multi-tenant tables, indexes, helper access functions, and RLS policies across organization- and brand-scoped entities; added typed DB interface scaffold `lib/supabase/database.types.ts`.
 - [ ] **A.6 Sprint A acceptance checklist complete**
 
+#### Sprint B progress checklist
+
+- [x] **B.1 Provider abstraction layer** — Added `lib/ai/providers/*` implementations for OpenAI, Anthropic, Gemini, and Perplexity with health checks and cost estimation.
+- [x] **B.2 Unified response format** — Extended `lib/ai/types.ts` with `AIResponse`, `Citation`, `AIExecuteOptions`, provider names, and orchestrator result types.
+- [x] **B.3 Orchestrator** — Added `lib/ai/orchestrator.ts` with parallel execution, retries, fallback chain support, and aggregate metrics.
+- [x] **B.4 Citation extraction** — Added `lib/ai/citation-extractor.ts` and integrated citation normalization in orchestration flow.
+- [x] **B.5 Cost optimization** — Added `lib/ai/cache.ts` + `lib/ai/cost-optimizer.ts` with budget guards, fallback model policy, and response cache.
+- [ ] **B.6 Sprint B acceptance checklist complete**
+
 1. Add `middleware.ts` for Supabase session refresh + protected `/dashboard` routes.
 2. Introduce **Zod** schemas for all API bodies; return 400 with structured errors.
 3. Replace in-memory stores with **Supabase repositories** (prompts, competitors, recommendations, analysis_results) + **RLS policies** per `user_id` / `brand_id`.
