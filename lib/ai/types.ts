@@ -1,4 +1,43 @@
 export type AIModelKey = "openai" | "anthropic";
+export type ProviderName = "openai" | "anthropic" | "gemini" | "perplexity";
+
+export interface Citation {
+  url: string;
+  domain: string;
+  title?: string;
+  snippet?: string;
+  position: number;
+}
+
+export interface AIExecuteOptions {
+  model?: string;
+  temperature?: number;
+  maxTokens?: number;
+  timeoutMs?: number;
+  systemPrompt?: string;
+  requestId: string;
+}
+
+export interface AIResponse {
+  provider: ProviderName;
+  model: string;
+  rawResponse: string;
+  citations: Citation[];
+  tokensUsed: { input: number; output: number };
+  cost: number;
+  latency: number;
+  timestamp: Date;
+  requestId: string;
+}
+
+export interface OrchestratorResult {
+  requestId: string;
+  prompt: string;
+  responses: AIResponse[];
+  failures: Array<{ provider: ProviderName; error: string }>;
+  totalCost: number;
+  totalLatency: number;
+}
 
 export interface SentimentResult {
   sentiment: "positive" | "neutral" | "negative";

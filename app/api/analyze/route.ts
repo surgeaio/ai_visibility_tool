@@ -1,10 +1,11 @@
 import { analyzePromptOrDemo } from "@/lib/ai/analyzer";
-import type { AIModelKey } from "@/lib/ai/types";
+import type { AIModelKey, ProviderName } from "@/lib/ai/types";
 import { rateLimitResponse, serverErrorResponse } from "@/lib/api/errors";
 import { getRequestId, validateBody } from "@/lib/api/validate";
 import { rateLimit } from "@/lib/rate-limit";
 import { analyzePromptRequestSchema } from "@/lib/validators";
 import { ResultsRepository } from "@/lib/repositories";
+import { executePromptAcrossModels } from "@/lib/ai/orchestrator";
 
 const SUPPORTED_MODELS: AIModelKey[] = ["openai", "anthropic"];
 const resultsRepo = new ResultsRepository();
@@ -22,6 +23,13 @@ export async function POST(req: Request) {
 
   try {
     const { prompt, brandName, competitors, models, promptId, brandId } = bodyValidation.data;
+    const providerModels = models as ProviderName[];
+    const orchestration = await executePromptAcrossModels({
+      prompt,
+      requestId,
+      providers: providerModels,
+    });
+
     const supportedModels = models.filter((model): model is AIModelKey =>
       SUPPORTED_MODELS.includes(model as AIModelKey),
     );
@@ -53,7 +61,7 @@ export async function POST(req: Request) {
         ),
       );
     }
-    return Response.json({ ...result, requestId });
+    return Response.json({ ...result, orchestration, requestId });
   } catch (error) {
     console.error(error);
     return serverErrorResponse("Analysis failed", requestId);
