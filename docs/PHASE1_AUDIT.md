@@ -141,6 +141,14 @@ Browser → Next.js (RSC + client islands) → API Routes → [Memory | OpenAI |
 - [x] **B.5 Cost optimization** — Added `lib/ai/cache.ts` + `lib/ai/cost-optimizer.ts` with budget guards, fallback model policy, and response cache.
 - [ ] **B.6 Sprint B acceptance checklist complete**
 
+#### Sprint C progress checklist
+
+- [x] **C.1 Redis setup (partial)** — Added `ioredis` + `bullmq` dependencies, env accessor (`lib/env.ts`), Redis singleton (`lib/redis/client.ts`), and `/api/health/redis` endpoint.
+- [ ] **C.2 Queue architecture**
+- [ ] **C.3 Workers**
+- [ ] **C.4 Job tracking UI**
+- [ ] **C.5 Queue wiring**
+
 1. Add `middleware.ts` for Supabase session refresh + protected `/dashboard` routes.
 2. Introduce **Zod** schemas for all API bodies; return 400 with structured errors.
 3. Replace in-memory stores with **Supabase repositories** (prompts, competitors, recommendations, analysis_results) + **RLS policies** per `user_id` / `brand_id`.
