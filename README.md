@@ -1,36 +1,32 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# AI Visibility Platform
 
-## Getting Started
+Next.js 14 (App Router) dashboard for **generative engine visibility**: prompts, competitors, sentiment, sources, recommendations, and optional BullMQ job execution.
 
-First, run the development server:
+## Quick start
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000). With no Supabase keys, **demo / auth bypass** mode serves seeded UI data (see `lib/config.ts`).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Scripts
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Script | Description |
+|--------|-------------|
+| `npm run dev` | Next.js dev server |
+| `npm run dev:full` | Next + workers + scheduler (`concurrently`) |
+| `npm run workers` | BullMQ worker (`REDIS_URL` required for real processing) |
+| `npm run scheduler` | Hourly HTTP ping to `/api/cron/run-schedules` when `APP_URL` + `CRON_SECRET` are set |
+| `npm run verify` | `typecheck` + `lint` + `build` |
+| `npm run db:seed` | Optional seed helper (needs service role key) |
 
-## Learn More
+## Docs
 
-To learn more about Next.js, take a look at the following resources:
+- [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) — local stack
+- [docs/ENV_SETUP.md](docs/ENV_SETUP.md) — environment variables
+- [docs/PHASE1_AUDIT.md](docs/PHASE1_AUDIT.md) — architecture audit + sprint checklist
+- [docs/COMPLETION_REPORT.md](docs/COMPLETION_REPORT.md) — honest delivery status
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Copy `.env.example` to `.env.local` and adjust.

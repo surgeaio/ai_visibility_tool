@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  Activity,
   Heart,
   LayoutDashboard,
   Lightbulb,
@@ -35,12 +36,14 @@ const TITLE_MAP: Record<string, string> = {
   "/dashboard/sentiment": "Sentiment",
   "/dashboard/sources": "Sources",
   "/dashboard/recommendations": "Recommendations",
+  "/dashboard/jobs": "Jobs",
   "/dashboard/settings": "Settings",
 };
 
 const NAV = [
   { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
   { href: "/dashboard/prompts", label: "Prompts", icon: MessageSquare },
+  { href: "/dashboard/jobs", label: "Jobs", icon: Activity },
   { href: "/dashboard/competitors", label: "Competitors", icon: Users },
   { href: "/dashboard/sentiment", label: "Sentiment", icon: Heart },
   { href: "/dashboard/sources", label: "Sources", icon: LinkIcon },

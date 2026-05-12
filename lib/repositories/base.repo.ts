@@ -1,20 +1,6 @@
 import { isAuthBypassMode } from "@/lib/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-export class NotFoundError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "NotFoundError";
-  }
-}
-
-export class DatabaseError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "DatabaseError";
-  }
-}
-
 export interface PaginationOptions {
   limit?: number;
   offset?: number;

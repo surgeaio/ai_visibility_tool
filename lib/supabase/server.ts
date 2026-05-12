@@ -1,7 +1,8 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
+import { cache } from "react";
 
-export async function createServerSupabaseClient() {
+async function createServerSupabaseClientUncached() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   if (!url || !key) {
@@ -25,3 +26,6 @@ export async function createServerSupabaseClient() {
     },
   });
 }
+
+/** One Supabase server client per request (RSC / route handler). */
+export const createServerSupabaseClient = cache(createServerSupabaseClientUncached);

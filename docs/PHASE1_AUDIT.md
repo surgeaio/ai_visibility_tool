@@ -9,20 +9,21 @@ _Generated as baseline for enterprise roadmap. Code state reflects repository sn
 | Layer | Current state |
 |-------|----------------|
 | **Frontend** | Next.js 14 App Router, React 18, Tailwind, Radix/shadcn-style UI, Framer Motion, Recharts, Zustand (`store/dashboard.ts`) |
-| **Marketing** | Route group `(marketing)/`: `/`, `/pricing`; components under `components/marketing/` |
-| **Dashboard** | `(dashboard)/dashboard/*`: overview, prompts, competitors, sentiment, sources, recommendations, settings |
-| **API** | Route handlers under `app/api/*` — REST-style JSON, no unified versioning |
-| **Auth** | Supabase client helpers (`lib/supabase/client.ts`, `server.ts`), `/login`, `/auth/callback` |
-| **AI** | `lib/ai/analyzer.ts`, `sentiment.ts`, `recommendations.ts`; providers: OpenAI + Anthropic only (`AIModelKey`: `openai` \| `anthropic`) |
-| **Persistence** | **Not wired**: prompts use in-memory `lib/prompt-store.ts`; competitors/recommendations APIs use module-level arrays; schema exists in `supabase/schema.sql` but app does not query it |
-| **Jobs / queues** | **None** (no BullMQ, Redis, workers) |
-| **Middleware** | **Missing** — no `middleware.ts` for Supabase session refresh / route protection |
+| **Marketing** | Route group `(marketing)/`: `/`, `/pricing` |
+| **Dashboard** | `(dashboard)/dashboard/*`: overview, prompts, **jobs**, competitors, sentiment, sources, recommendations, settings |
+| **API** | REST-style handlers under `app/api/*` with Zod validation and `requestId` on errors |
+| **Auth** | `middleware.ts` + `lib/supabase/middleware.ts`; `isAuthBypassMode()` when Supabase env missing or demo flags |
+| **AI** | `lib/ai/*`: multi-provider adapters, orchestrator, citation extractor, optional Redis-backed response cache |
+| **Persistence** | `lib/repositories/*` → Supabase in live mode, seeded **demo** paths when auth bypass / demo mode |
+| **Queues** | BullMQ `prompt-execution` queue when `REDIS_URL` set; `workers/index.ts`; `/api/prompts/[id]/run` enqueues |
+| **Cron** | `/api/cron/run-schedules` (stub scan) + optional `lib/scheduler/cron-runner.ts` HTTP ping |
 
 **Diagram (logical)**
 
 ```
-Browser → Next.js (RSC + client islands) → API Routes → [Memory | OpenAI | Anthropic]
-                                              ↘ Supabase (auth only when configured; DB unused by APIs)
+Browser → Next.js (RSC + client) → API routes → Repositories → [Demo seed | Supabase]
+                              ↘ BullMQ (Redis) ← workers
+                              ↘ AI providers (optional keys)
 ```
 
 ---
@@ -31,43 +32,38 @@ Browser → Next.js (RSC + client islands) → API Routes → [Memory | OpenAI |
 
 | Area | Gap |
 |------|-----|
-| **Data layer** | No repositories, services, pagination, filters, or RLS-backed queries |
-| **Multi-model** | No Gemini, Perplexity, or abstract provider interface beyond two SDK calls |
-| **Mention detection** | Substring `indexOf` only — no aliases, fuzzy match, or NER |
-| **Sentiment** | Single GPT-4o JSON pass + demo heuristic; no sentence-level pipeline, trust/buying intent |
-| **Patterns / GEO** | Rule-of-thumb `detectPatterns`; no historical diff, citation extraction, or SERP-style GEO scoring |
-| **Analytics** | Charts fed from `lib/demo-data.ts` + Zustand; no aggregation tables or caches |
-| **Scheduling** | No cron, no `next_run`, no execution logs |
-| **Billing / orgs** | Not present |
-| **Observability** | No structured logging, error tracking, or metrics hooks |
+| **Data layer** | Repositories exist; generated `database.types.ts` not fully wired; some entities still thin |
+| **Dashboard data** | Much UI still reads `lib/demo-data` / Zustand rather than live API polling everywhere |
+| **Patterns / GEO** | Roadmap patterns, crawlers, FAQ/entity analyzers largely not implemented |
+| **Analytics** | Aggregation tables / cron refresh not built |
+| **Billing / orgs** | Stripe + invites not implemented |
+| **Observability** | No Sentry/pino wiring in repo yet |
 
 ---
 
-## 3. Demo / in-memory logic inventory
+## 3. Demo / persistence inventory
 
 | Location | Behavior |
 |----------|----------|
-| `lib/demo-data.ts` | Seeds UI metrics, charts, activity, sources |
-| `lib/prompt-store.ts` | Mutable array initialized from demo prompts — **lost on cold start / multi-instance** |
-| `app/api/competitors/route.ts` | In-memory `competitors` array |
-| `app/api/recommendations/route.ts` | `Set` for completed IDs + static `DEMO_RECOMMENDATIONS` |
-| `lib/config.ts` | `isDemoMode()` when no AI keys — `analyzePromptOrDemo` returns canned analysis |
-| Dashboard pages | Mostly client components reading hooks/store + demo constants |
+| `lib/demo-data.ts` | Seeds UI metrics, charts, activity, sources, **DEMO_CITATIONS** |
+| `lib/repositories/*.repo.ts` | `isAuthBypassMode()` → in-memory / demo collections; else Supabase |
+| `lib/config.ts` | `isDemoMode()` / `isAuthBypassMode()` gate demo vs live |
 
 ---
 
-## 4. API inventory
+## 4. API inventory (selected)
 
-| Route | Purpose | Persistence | Notes |
-|-------|---------|-------------|-------|
-| `POST /api/analyze` | Run analysis | No | Rate limit in-process Map; not distributed |
-| `POST /api/sentiment` | Sentiment only | No | |
-| `GET/POST /api/prompts` | List/create | Memory (`prompt-store`) | |
-| `DELETE /api/prompts/[id]` | Delete | Memory | |
-| `GET/POST /api/competitors` | List/add | Memory | |
-| `GET/POST /api/recommendations` | List / mark done | Memory + static demo | |
-
-**Missing** (relative to roadmap): authenticated CRUD by brand/org, batch analyze, schedule CRUD, exports server-side, webhooks, admin APIs.
+| Route | Purpose |
+|-------|---------|
+| `POST /api/analyze` | Multi-provider orchestration + demo fallback |
+| `GET/POST /api/prompts` | List/create via `PromptsRepository` |
+| `GET/PATCH/DELETE /api/prompts/[id]` | CRUD |
+| `POST /api/prompts/[id]/run` | Enqueue BullMQ job (or local stub id) |
+| `GET/POST /api/competitors` | Repository-backed |
+| `GET/POST /api/recommendations` | Repository-backed |
+| `GET /api/citations` | Citations list |
+| `GET /api/health`, `/api/health/db`, `/api/health/redis`, `/api/health/queues` | Probes |
+| `GET/POST /api/cron/run-schedules` | Cron stub (secret or Vercel cron header) |
 
 ---
 
@@ -80,31 +76,25 @@ Browser → Next.js (RSC + client islands) → API Routes → [Memory | OpenAI |
 | Framework | `next`, `react`, `react-dom` |
 | UI | `@radix-ui/*`, `class-variance-authority`, `clsx`, `tailwind-merge`, `tailwindcss-animate`, `geist`, `lucide-react`, `framer-motion`, `recharts` |
 | Data / auth | `@supabase/supabase-js`, `@supabase/ssr` |
-| AI | `openai`, `@anthropic-ai/sdk` |
+| AI | `openai`, `@anthropic-ai/sdk`, `@google/generative-ai` |
+| Queues / cache | `bullmq`, `ioredis` |
+| Validation | `zod` |
 | State | `zustand` |
-| Utils | `date-fns` |
 
-**Not present (required for stated phases 4–6, 11–14)**
+**Still not present for full roadmap**
 
-- `bullmq`, `ioredis` (or Vercel Queue / Inngest alternative)
-- `@google/generative-ai` or Vertex (Gemini)
-- Perplexity official SDK (HTTP client only)
-- `zod` (request validation)
-- `@stripe/stripe-js` / `stripe` (billing)
-- Redis rate-limit adapter (`@upstash/ratelimit` common on Vercel)
+- `stripe`, Sentry, production rate-limit adapter, Playwright E2E, Scalar API docs UI
 
 ---
 
 ## 6. Security report
 
-| Topic | Risk | Severity |
-|-------|------|----------|
-| **API auth** | Analyze/sentiment/prompts routes appear **unauthenticated** — anyone who can hit the deployment can burn quotas | **High** |
-| **Rate limiting** | In-memory per Node process — ineffective horizontally; resets on restart | **Medium** |
-| **Secrets** | Service role key in `.env.example` — ensure never exposed client-side (currently OK if server-only) | **Low** (process) |
-| **RLS** | Schema has tables but **no RLS policies** in repo | **High** when multi-tenant |
-| **Input validation** | No Zod on API bodies — injection / malformed payloads possible | **Medium** |
-| **CORS / CSRF** | Default Next.js behavior; OAuth callback depends on Supabase config | **Medium** |
+| Topic | Notes | Severity |
+|-------|-------|----------|
+| **API auth** | `/api/*` requires Supabase session except public paths (`/api/auth`, `/api/webhooks`, `/api/health`, `/api/cron`). Demo bypass disables enforcement when env incomplete — **local demos only**. | Medium (prod misconfig) |
+| **Rate limiting** | Not distributed; roadmap Redis / Edge limits | Medium |
+| **RLS** | Defined in `supabase/schema.sql` — verify applied in hosted project | High if skipped |
+| **Input validation** | Zod on major routes — extend to all new handlers | Low–Medium |
 
 ---
 
@@ -114,8 +104,8 @@ Browser → Next.js (RSC + client islands) → API Routes → [Memory | OpenAI |
 |-------|-------------|
 | **Charts** | Recharts in client components; SSR/static generation can log dimension warnings — use explicit heights / dynamic import if needed |
 | **Bundle** | Dashboard routes pull Recharts + Framer Motion; consider lazy charts per route |
-| **DB** | N/A until queries exist — future risk: N+1 without indexes |
-| **Caching** | No CDN headers strategy documented; no Redis cache for analytics |
+| **DB** | Repositories hit Supabase when configured; add query monitoring as data grows |
+| **Caching** | AI response cache (memory + Redis); analytics CDN TBD |
 
 ---
 
@@ -130,7 +120,7 @@ Browser → Next.js (RSC + client islands) → API Routes → [Memory | OpenAI |
 - [x] **A.3 Supabase Repository Pattern** — Added `lib/repositories/*` with base abstractions, typed CRUD contracts, pagination/query options, and repository-backed API integration for prompts, competitors, and recommendations.
 - [x] **A.4 Replace In-Memory Stores** — API routes now use repositories (`prompts`, `competitors`, `recommendations`, `brands`, `results`), `lib/prompt-store.ts` removed, and demo fallback retained through repository demo mode.
 - [x] **A.5 RLS Policies** — Expanded `supabase/schema.sql` with multi-tenant tables, indexes, helper access functions, and RLS policies across organization- and brand-scoped entities; added typed DB interface scaffold `lib/supabase/database.types.ts`.
-- [ ] **A.6 Sprint A acceptance checklist complete**
+- [x] **A.6 Sprint A acceptance** — `npm run verify` passes on demo configuration; live Supabase remains operator-verified.
 
 #### Sprint B progress checklist
 
@@ -138,20 +128,20 @@ Browser → Next.js (RSC + client islands) → API Routes → [Memory | OpenAI |
 - [x] **B.2 Unified response format** — Extended `lib/ai/types.ts` with `AIResponse`, `Citation`, `AIExecuteOptions`, provider names, and orchestrator result types.
 - [x] **B.3 Orchestrator** — Added `lib/ai/orchestrator.ts` with parallel execution, retries, fallback chain support, and aggregate metrics.
 - [x] **B.4 Citation extraction** — Added `lib/ai/citation-extractor.ts` and integrated citation normalization in orchestration flow.
-- [x] **B.5 Cost optimization** — Added `lib/ai/cache.ts` + `lib/ai/cost-optimizer.ts` with budget guards, fallback model policy, and response cache.
-- [ ] **B.6 Sprint B acceptance checklist complete**
+- [x] **B.5 Cost optimization** — Added `lib/ai/cache.ts` + `lib/ai/cost-optimizer.ts` with budget guards, fallback model policy, and response cache (memory + optional Redis).
+- [ ] **B.6 Sprint B acceptance checklist complete** (prompt library files + full test matrix)
 
 #### Sprint C progress checklist
 
-- [x] **C.1 Redis setup (partial)** — Added `ioredis` + `bullmq` dependencies, env accessor (`lib/env.ts`), Redis singleton (`lib/redis/client.ts`), and `/api/health/redis` endpoint.
-- [ ] **C.2 Queue architecture**
-- [ ] **C.3 Workers**
-- [ ] **C.4 Job tracking UI**
-- [ ] **C.5 Queue wiring**
+- [x] **C.1 Redis setup** — `ioredis` + `bullmq`, `lib/env.ts`, `lib/redis/client.ts`, `/api/health/redis`.
+- [x] **C.2 Queue architecture** — `prompt-execution` BullMQ queue module (`lib/queues/*`).
+- [x] **C.3 Workers** — `workers/index.ts` + `npm run workers`.
+- [x] **C.4 Job tracking UI** — `/dashboard/jobs` + `/api/health/queues`.
+- [x] **C.5 Queue wiring** — `POST /api/prompts/[id]/run` enqueues when Redis is configured.
 
-1. Add `middleware.ts` for Supabase session refresh + protected `/dashboard` routes.
-2. Introduce **Zod** schemas for all API bodies; return 400 with structured errors.
-3. Replace in-memory stores with **Supabase repositories** (prompts, competitors, recommendations, analysis_results) + **RLS policies** per `user_id` / `brand_id`.
+1. ~~Add `middleware.ts` for Supabase session refresh + protected `/dashboard` routes.~~ **Done**
+2. ~~Introduce **Zod** schemas for all API bodies; return 400 with structured errors.~~ **Partial — extend to remaining routes**
+3. ~~Replace in-memory stores with **Supabase repositories**~~ **Partial — finish Zustand→API + citations DB depth**
 4. Move rate limiting to **Redis/Upstash** (or Edge Config) for serverless compatibility.
 
 ### P1 — AI engine
