@@ -1,0 +1,14 @@
+/** BullMQ queue names — keep in sync with workers and enqueue sites. */
+export const PROMPT_EXECUTION_QUEUE_NAME = "prompt-execution";
+export const SENTIMENT_ANALYSIS_QUEUE_NAME = "sentiment-analysis";
+export const RECOMMENDATION_QUEUE_NAME = "recommendation-generation";
+export const CITATION_EXTRACTION_QUEUE_NAME = "citation-extraction";
+export const TREND_ANALYSIS_QUEUE_NAME = "trend-analysis";
+
+export const BULL_QUEUE_NAMES = [
+  PROMPT_EXECUTION_QUEUE_NAME,
+  SENTIMENT_ANALYSIS_QUEUE_NAME,
+  RECOMMENDATION_QUEUE_NAME,
+  CITATION_EXTRACTION_QUEUE_NAME,
+  TREND_ANALYSIS_QUEUE_NAME,
+] as const;

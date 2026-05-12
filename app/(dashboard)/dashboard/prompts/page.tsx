@@ -1,7 +1,7 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { Download, MoreHorizontal, Plus, Play } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { Download, MoreHorizontal, Plus, Play, RefreshCw } from "lucide-react";
 import { SentimentBadge } from "@/components/dashboard/SentimentBadge";
 import { ResponseViewer } from "@/components/dashboard/ResponseViewer";
 import { Button } from "@/components/ui/button";
@@ -19,19 +19,31 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { DEMO_PROMPTS } from "@/lib/demo-data";
+import { DEMO_BRAND } from "@/lib/demo/seed-data";
+import { useDashboardStore } from "@/store/dashboard";
 
 const DEMO_RESPONSE =
   "For startups comparing CRMs, HubSpot remains popular for breadth while Attio stands out for a modern UX and flexible data model. Salesforce leads enterprise complexity.";
 
 export default function PromptsPage() {
-  const [prompts, setPrompts] = useState(DEMO_PROMPTS);
+  const brandName = useDashboardStore((s) => s.brandName);
+  const prompts = useDashboardStore((s) => s.apiPrompts);
+  const promptsStatus = useDashboardStore((s) => s.apiPromptsStatus);
+  const promptsError = useDashboardStore((s) => s.apiPromptsError);
+  const fetchApiPrompts = useDashboardStore((s) => s.fetchApiPrompts);
+
   const [selected, setSelected] = useState<Record<string, boolean>>({});
   const [modalOpen, setModalOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(null);
   const [newPrompt, setNewPrompt] = useState("");
   const [category, setCategory] = useState("CRM");
   const [runNow, setRunNow] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    void fetchApiPrompts();
+  }, [fetchApiPrompts]);
 
   const detail = useMemo(() => prompts.find((p) => p.id === detailId), [prompts, detailId]);
 
@@ -39,21 +51,82 @@ export default function PromptsPage() {
     .filter(([, v]) => v)
     .map(([k]) => k);
 
-  function addPrompt() {
-    if (!newPrompt.trim()) return;
-    setPrompts((prev) => [
-      {
-        id: crypto.randomUUID(),
-        text: newPrompt.trim(),
-        category,
-        visibility: false,
-        sentiment: null,
-        lastRun: new Date().toISOString(),
-      },
-      ...prev,
-    ]);
-    setNewPrompt("");
-    setModalOpen(false);
+  async function addPrompt() {
+    if (!newPrompt.trim() || saving) return;
+    setSaving(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/prompts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text: newPrompt.trim(), category }),
+      });
+      if (!res.ok) {
+        throw new Error((await res.text()) || res.statusText);
+      }
+      const created = (await res.json()) as {
+        id: string;
+        text: string;
+        category: string;
+        visibility: boolean;
+        sentiment: number | null;
+        lastRun: string;
+      };
+      if (runNow) {
+        await fetch(`/api/prompts/${encodeURIComponent(created.id)}/run`, { method: "POST" });
+      }
+      setNewPrompt("");
+      setModalOpen(false);
+      await fetchApiPrompts();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to save prompt");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function removePrompt(id: string) {
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/prompts/${encodeURIComponent(id)}`, { method: "DELETE" });
+      if (!res.ok) {
+        throw new Error((await res.text()) || res.statusText);
+      }
+      setSelected((s) => {
+        const next = { ...s };
+        delete next[id];
+        return next;
+      });
+      await fetchApiPrompts();
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to delete");
+    }
+  }
+
+  async function runPrompt(id: string) {
+    setActionError(null);
+    try {
+      const res = await fetch(`/api/prompts/${encodeURIComponent(id)}/run`, { method: "POST" });
+      if (!res.ok) {
+        throw new Error((await res.text()) || res.statusText);
+      }
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to enqueue run");
+    }
+  }
+
+  async function runSelected() {
+    setActionError(null);
+    try {
+      for (const id of selectedIds) {
+        const res = await fetch(`/api/prompts/${encodeURIComponent(id)}/run`, { method: "POST" });
+        if (!res.ok) {
+          throw new Error((await res.text()) || res.statusText);
+        }
+      }
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to enqueue runs");
+    }
   }
 
   function exportCsv() {
@@ -80,11 +153,20 @@ export default function PromptsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           {selectedIds.length > 0 && (
-            <Button variant="secondary" size="sm">
+            <Button variant="secondary" size="sm" onClick={() => void runSelected()}>
               <Play className="mr-2 h-4 w-4" />
               Run selected ({selectedIds.length})
             </Button>
           )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => void fetchApiPrompts()}
+            disabled={promptsStatus === "loading"}
+          >
+            <RefreshCw className={`mr-2 h-4 w-4 ${promptsStatus === "loading" ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
           <Button variant="secondary" size="sm" onClick={exportCsv}>
             <Download className="mr-2 h-4 w-4" />
             Export CSV
@@ -134,12 +216,26 @@ export default function PromptsPage() {
                 <Button variant="secondary" onClick={() => setModalOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={addPrompt}>Save</Button>
+                <Button onClick={() => void addPrompt()} disabled={saving}>
+                  {saving ? "Saving…" : "Save"}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         </div>
       </div>
+
+      {promptsError ? (
+        <div className="rounded-lg border border-amber-900/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
+          <span className="font-medium">Could not sync prompts from API.</span> Showing seed fallback.{" "}
+          <span className="text-amber-200/80">{promptsError}</span>
+        </div>
+      ) : null}
+      {actionError ? (
+        <div className="rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+          {actionError}
+        </div>
+      ) : null}
 
       <div className="overflow-hidden rounded-xl border border-[#262626] bg-[#111]">
         <table className="w-full text-left text-sm">
@@ -167,6 +263,13 @@ export default function PromptsPage() {
             </tr>
           </thead>
           <tbody className="divide-y divide-[#262626]">
+            {promptsStatus === "loading" && prompts.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="p-8 text-center text-neutral-500">
+                  Loading prompts…
+                </td>
+              </tr>
+            ) : null}
             {prompts.map((p) => (
               <tr key={p.id} className="hover:bg-[#1a1a1a]/50">
                 <td className="p-4">
@@ -193,9 +296,10 @@ export default function PromptsPage() {
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
                       <DropdownMenuItem onClick={() => setDetailId(p.id)}>View results</DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => void runPrompt(p.id)}>Run now</DropdownMenuItem>
                       <DropdownMenuItem
                         className="text-red-400"
-                        onClick={() => setPrompts((prev) => prev.filter((x) => x.id !== p.id))}
+                        onClick={() => void removePrompt(p.id)}
                       >
                         Delete
                       </DropdownMenuItem>
@@ -217,11 +321,19 @@ export default function PromptsPage() {
           <div className="mt-6 space-y-6">
             <div>
               <p className="mb-2 text-xs font-medium uppercase text-neutral-500">ChatGPT · excerpt</p>
-              <ResponseViewer text={DEMO_RESPONSE} brandName="Attio" competitorNames={["HubSpot", "Salesforce"]} />
+              <ResponseViewer
+                text={DEMO_RESPONSE}
+                brandName={brandName || DEMO_BRAND.name}
+                competitorNames={["HubSpot", "Salesforce"]}
+              />
             </div>
             <div>
               <p className="mb-2 text-xs font-medium uppercase text-neutral-500">Claude · excerpt</p>
-              <ResponseViewer text={DEMO_RESPONSE} brandName="Attio" competitorNames={["HubSpot"]} />
+              <ResponseViewer
+                text={DEMO_RESPONSE}
+                brandName={brandName || DEMO_BRAND.name}
+                competitorNames={["HubSpot"]}
+              />
             </div>
           </div>
         </SheetContent>

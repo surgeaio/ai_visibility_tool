@@ -1,4 +1,4 @@
-import { DEMO_CITATIONS } from "@/lib/demo-data";
+import { DEMO_CITATIONS } from "@/lib/demo/seed-data";
 import { BaseRepository, type PaginatedResult, type QueryOptions } from "@/lib/repositories/base.repo";
 import { DatabaseError } from "@/lib/repositories/errors";
 import type { CitationRow } from "@/lib/supabase/types";

@@ -31,7 +31,7 @@ import {
   DEMO_MODEL_COVERAGE,
   DEMO_POSITION_RANKING,
   DEMO_SENTIMENT_DIST,
-} from "@/lib/demo-data";
+} from "@/lib/demo/seed-data";
 import { cn } from "@/lib/utils";
 import { useBrandMetrics } from "@/store/dashboard";
 

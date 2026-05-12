@@ -31,13 +31,8 @@ export async function GET(req: Request) {
   }
 }
 
-export async function POST(req: Request) {
-  const requestId = getRequestId(req);
-  const bodyValidation = await validateBody(
-    req,
-    updateRecommendationStatusSchema,
-    requestId,
-  );
+async function updateStatus(req: Request, requestId: string) {
+  const bodyValidation = await validateBody(req, updateRecommendationStatusSchema, requestId);
   if (!bodyValidation.success) return bodyValidation.response;
 
   try {
@@ -48,4 +43,14 @@ export async function POST(req: Request) {
     console.error(error);
     return serverErrorResponse("Failed to update recommendation", requestId);
   }
+}
+
+export async function POST(req: Request) {
+  const requestId = getRequestId(req);
+  return updateStatus(req, requestId);
+}
+
+export async function PATCH(req: Request) {
+  const requestId = getRequestId(req);
+  return updateStatus(req, requestId);
 }

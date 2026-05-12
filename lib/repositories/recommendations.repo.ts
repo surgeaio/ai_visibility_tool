@@ -1,4 +1,4 @@
-import { DEMO_RECOMMENDATIONS } from "@/lib/demo-data";
+import { DEMO_RECOMMENDATIONS } from "@/lib/demo/seed-data";
 import type { RecommendationRow } from "@/lib/supabase/types";
 import { BaseRepository, type PaginatedResult, type QueryOptions } from "@/lib/repositories/base.repo";
 import { DatabaseError } from "@/lib/repositories/errors";

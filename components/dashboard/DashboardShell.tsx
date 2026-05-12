@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BookOpen,
   Heart,
   LayoutDashboard,
   Lightbulb,
@@ -25,7 +26,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { DEMO_BRAND, DEMO_RECOMMENDATIONS } from "@/lib/demo-data";
+import { DEMO_BRAND, DEMO_RECOMMENDATIONS } from "@/lib/demo/seed-data";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/store/dashboard";
 
@@ -35,6 +36,7 @@ const TITLE_MAP: Record<string, string> = {
   "/dashboard/competitors": "Competitors",
   "/dashboard/sentiment": "Sentiment",
   "/dashboard/sources": "Sources",
+  "/dashboard/citations": "Citations",
   "/dashboard/recommendations": "Recommendations",
   "/dashboard/jobs": "Jobs",
   "/dashboard/settings": "Settings",
@@ -47,6 +49,7 @@ const NAV = [
   { href: "/dashboard/competitors", label: "Competitors", icon: Users },
   { href: "/dashboard/sentiment", label: "Sentiment", icon: Heart },
   { href: "/dashboard/sources", label: "Sources", icon: LinkIcon },
+  { href: "/dashboard/citations", label: "Citations", icon: BookOpen },
   {
     href: "/dashboard/recommendations",
     label: "Recommendations",

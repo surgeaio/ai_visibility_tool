@@ -1,7 +1,7 @@
 import type { BrandRow } from "@/lib/supabase/types";
 import { BaseRepository, type PaginatedResult, type QueryOptions } from "@/lib/repositories/base.repo";
 import { DatabaseError } from "@/lib/repositories/errors";
-import { DEMO_BRAND } from "@/lib/demo-data";
+import { DEMO_BRAND } from "@/lib/demo/seed-data";
 
 export interface BrandEntity {
   id: string;

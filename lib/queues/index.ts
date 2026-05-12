@@ -1,2 +1,7 @@
+export * from "@/lib/queues/queue-names";
 export * from "@/lib/queues/types";
 export * from "@/lib/queues/prompt-execution.queue";
+export * from "@/lib/queues/sentiment-analysis.queue";
+export * from "@/lib/queues/recommendation.queue";
+export * from "@/lib/queues/citation-extraction.queue";
+export * from "@/lib/queues/trend-analysis.queue";

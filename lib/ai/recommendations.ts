@@ -1,5 +1,5 @@
 import type { Pattern, SentimentResult } from "./types";
-import { DEMO_PATTERNS } from "@/lib/demo-data";
+import { DEMO_PATTERNS } from "@/lib/demo/seed-data";
 
 /** Minimal slice for pattern detection (per model or aggregated run). */
 export interface PatternSlice {
