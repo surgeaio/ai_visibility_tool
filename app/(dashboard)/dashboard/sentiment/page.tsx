@@ -3,7 +3,7 @@
 import { PatternCard } from "@/components/dashboard/PatternCard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DEMO_PATTERNS, DEMO_SENTENCES, DEMO_SENTIMENT_KEYWORDS } from "@/lib/demo-data";
+import { DEMO_PATTERNS, DEMO_SENTENCES, DEMO_SENTIMENT_KEYWORDS } from "@/lib/demo/seed-data";
 import { cn } from "@/lib/utils";
 
 const SCORE = 72;

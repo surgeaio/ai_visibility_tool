@@ -12,6 +12,10 @@
     "workers": "tsx workers/index.ts",
     "scheduler": "tsx lib/scheduler/cron-runner.ts",
     "db:seed": "tsx scripts/seed.ts",
+    "db:migrate": "supabase migration up",
+    "db:reset": "supabase db reset",
+    "db:types": "supabase gen types typescript --local --schema public > lib/supabase/database.types.ts",
+    "setup": "npm install",
     "verify": "npm run typecheck && npm run lint && npm run build"
   },
   "dependencies": {

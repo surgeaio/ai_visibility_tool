@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DEMO_CITED_PAGES, DEMO_SOURCE_GAPS, DEMO_SOURCES } from "@/lib/demo-data";
+import { DEMO_CITED_PAGES, DEMO_SOURCE_GAPS, DEMO_SOURCES } from "@/lib/demo/seed-data";
 
 export default function SourcesPage() {
   return (

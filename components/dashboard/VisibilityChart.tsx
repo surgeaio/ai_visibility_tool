@@ -10,7 +10,7 @@ import {
   ResponsiveContainer,
   Legend,
 } from "recharts";
-import { DEMO_CHART_DATA } from "@/lib/demo-data";
+import { DEMO_CHART_DATA } from "@/lib/demo/seed-data";
 
 const COLORS: Record<string, string> = {
   attio: "#ffffff",

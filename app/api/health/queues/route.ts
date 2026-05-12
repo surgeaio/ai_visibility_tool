@@ -1,11 +1,11 @@
 import { Queue } from "bullmq";
 import { NextResponse } from "next/server";
-import { PROMPT_EXECUTION_QUEUE_NAME } from "@/lib/queues/prompt-execution.queue";
+import { BULL_QUEUE_NAMES } from "@/lib/queues/queue-names";
 import { createBullMQConnection } from "@/lib/redis/client";
 
 export async function GET() {
-  const connection = createBullMQConnection();
-  if (!connection) {
+  const base = createBullMQConnection();
+  if (!base) {
     return NextResponse.json({
       status: "degraded",
       redis: false,
@@ -15,19 +15,29 @@ export async function GET() {
   }
 
   try {
-    if (connection.status === "wait") {
-      await connection.connect();
+    if (base.status === "wait") {
+      await base.connect();
     }
-    const q = new Queue(PROMPT_EXECUTION_QUEUE_NAME, { connection });
-    const counts = await q.getJobCounts();
-    await q.close();
-    await connection.quit();
+
+    const queues: Record<string, Awaited<ReturnType<Queue["getJobCounts"]>>> = {};
+
+    for (const name of BULL_QUEUE_NAMES) {
+      const conn = base.duplicate();
+      if (conn.status === "wait") {
+        await conn.connect();
+      }
+      const q = new Queue(name, { connection: conn });
+      queues[name] = await q.getJobCounts();
+      await q.close();
+      await conn.quit();
+    }
+
+    await base.quit();
+
     return NextResponse.json({
       status: "ok",
       redis: true,
-      queues: {
-        [PROMPT_EXECUTION_QUEUE_NAME]: counts,
-      },
+      queues,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Unknown error";

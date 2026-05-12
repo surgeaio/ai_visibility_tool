@@ -1,8 +1,9 @@
 import { Queue } from "bullmq";
 import { createBullMQConnection } from "@/lib/redis/client";
+import { PROMPT_EXECUTION_QUEUE_NAME } from "@/lib/queues/queue-names";
 import type { PromptExecutionJobData } from "@/lib/queues/types";
 
-export const PROMPT_EXECUTION_QUEUE_NAME = "prompt-execution";
+export { PROMPT_EXECUTION_QUEUE_NAME };
 
 let queue: Queue<PromptExecutionJobData> | null | undefined;
 

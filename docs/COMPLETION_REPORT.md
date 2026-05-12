@@ -4,16 +4,15 @@
 
 This report reflects the **actual** repository state after incremental implementation. Many roadmap sprints from the master prompt remain **partial** or **not started**; the app is still **runnable locally** in demo mode.
 
-## Done (high level)
+## Done (this increment)
 
-- Next.js 14 dashboard + marketing shell, strict TypeScript baseline.
-- Supabase auth middleware with `isAuthBypassMode()` when env is incomplete.
-- Zod validation layer (`lib/validators`, `lib/api/validate.ts`).
-- Repository pattern for prompts, competitors, brands, results, recommendations, citations (demo fallback + Supabase paths).
-- Expanded `supabase/schema.sql` with RLS helpers; baseline migration file under `supabase/migrations/`.
-- Multi-provider AI scaffolding (`lib/ai/providers`, orchestrator, citation extractor, cost helper) and Redis-backed **optional** AI response cache.
-- BullMQ **prompt-execution** queue, worker entrypoint, `/api/prompts/[id]/run`, health endpoints (`/api/health`, `/api/health/db`, `/api/health/redis`, `/api/health/queues`), stub cron route, dashboard **Jobs** page.
-- Local docs: `docs/LOCAL_SETUP.md`, `docs/ENV_SETUP.md`.
+- Sprint **A.3** gaps: `BaseRepository` adds `findManyByBrand`, `findManyByOrg`, and `count()` defaults.
+- Sprint **A.4**: `lib/demo/seed-data.ts` barrel; Zustand `fetchApiPrompts` + overview metrics use API-backed prompts; prompts dashboard loads/saves/deletes via REST with loading + error banners; `/dashboard/citations` + sidebar link.
+- Sprint **B.6 (partial)**: `lib/ai/prompts/*` prompt templates.
+- Sprint **C.2–C.3**: additional BullMQ queues + split worker modules.
+- Sprint **D.1 (partial)**: `lib/scheduler/index.ts`, `schedule-manager.ts`, `vercel-cron.ts` stubs.
+- **J / Local**: `next.config.mjs` security headers; `Dockerfile.worker`; `.github/workflows/ci.yml`; `docs/DEPLOYMENT.md`, `ARCHITECTURE.md`, `API.md`, `CONTRIBUTING.md`; `PATCH /api/recommendations`; `npm` `db:*` scripts; Redis health helper with latency.
+- **Earlier baseline (unchanged):** middleware + demo bypass, Zod APIs, repositories, schema/migrations snapshot, multi-provider AI + Redis cache, BullMQ prompt run + health + jobs page, `LOCAL_SETUP` / `ENV_SETUP`.
 
 ## Not complete (vs master prompt)
 

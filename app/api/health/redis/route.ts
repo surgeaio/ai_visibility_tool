@@ -1,16 +1,26 @@
 import { getRequestId } from "@/lib/api/validate";
-import { pingRedis } from "@/lib/redis/client";
+import { getRedisHealth } from "@/lib/redis/health";
 
 export async function GET(req: Request) {
   const requestId = getRequestId(req);
-  const ok = await pingRedis();
-  return Response.json(
-    {
-      status: ok ? "ok" : "degraded",
-      service: "redis",
-      requestId,
-      checkedAt: new Date().toISOString(),
-    },
-    { status: ok ? 200 : 503 },
-  );
+  const health = await getRedisHealth();
+  if (!health.ok) {
+    return Response.json(
+      {
+        status: "degraded",
+        service: "redis",
+        requestId,
+        checkedAt: new Date().toISOString(),
+        reason: health.reason,
+      },
+      { status: 503 },
+    );
+  }
+  return Response.json({
+    status: "ok",
+    service: "redis",
+    requestId,
+    checkedAt: new Date().toISOString(),
+    latencyMs: health.latencyMs,
+  });
 }

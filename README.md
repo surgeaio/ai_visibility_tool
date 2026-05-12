@@ -26,6 +26,10 @@ Open [http://localhost:3000](http://localhost:3000). With no Supabase keys, **de
 
 - [docs/LOCAL_SETUP.md](docs/LOCAL_SETUP.md) — local stack
 - [docs/ENV_SETUP.md](docs/ENV_SETUP.md) — environment variables
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — Vercel, workers Docker, Supabase
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system overview
+- [docs/API.md](docs/API.md) — selected HTTP routes
+- [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md) — contribution guidelines
 - [docs/PHASE1_AUDIT.md](docs/PHASE1_AUDIT.md) — architecture audit + sprint checklist
 - [docs/COMPLETION_REPORT.md](docs/COMPLETION_REPORT.md) — honest delivery status
 

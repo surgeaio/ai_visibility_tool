@@ -43,4 +43,29 @@ export abstract class BaseRepository<TItem, TCreate, TUpdate> {
   abstract create(input: TCreate): Promise<TItem>;
   abstract update(id: string, input: TUpdate): Promise<TItem>;
   abstract delete(id: string): Promise<boolean>;
+
+  /** Delegates to `findMany` with `brandId` merged into filters. */
+  async findManyByBrand(brandId: string, options: QueryOptions = {}): Promise<PaginatedResult<TItem>> {
+    return this.findMany({
+      ...options,
+      filters: { ...options.filters, brandId },
+    });
+  }
+
+  /** Delegates to `findMany` with `orgId` merged into filters (repos may ignore until org scoping lands). */
+  async findManyByOrg(orgId: string, options: QueryOptions = {}): Promise<PaginatedResult<TItem>> {
+    return this.findMany({
+      ...options,
+      filters: { ...options.filters, orgId },
+    });
+  }
+
+  /** Total matching rows; default uses `findMany` total (override for efficient SQL COUNT). */
+  async count(filters?: Record<string, string | number | boolean | null | undefined>): Promise<number> {
+    const { total } = await this.findMany({
+      pagination: { limit: 1, offset: 0 },
+      filters,
+    });
+    return total;
+  }
 }

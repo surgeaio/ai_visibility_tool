@@ -33,7 +33,7 @@ Browser → Next.js (RSC + client) → API routes → Repositories → [Demo see
 | Area | Gap |
 |------|-----|
 | **Data layer** | Repositories exist; generated `database.types.ts` not fully wired; some entities still thin |
-| **Dashboard data** | Much UI still reads `lib/demo-data` / Zustand rather than live API polling everywhere |
+| **Dashboard data** | Overview + prompts use Zustand-backed `GET /api/prompts`; other pages still lean on seed exports where noted below |
 | **Patterns / GEO** | Roadmap patterns, crawlers, FAQ/entity analyzers largely not implemented |
 | **Analytics** | Aggregation tables / cron refresh not built |
 | **Billing / orgs** | Stripe + invites not implemented |
@@ -45,7 +45,7 @@ Browser → Next.js (RSC + client) → API routes → Repositories → [Demo see
 
 | Location | Behavior |
 |----------|----------|
-| `lib/demo-data.ts` | Seeds UI metrics, charts, activity, sources, **DEMO_CITATIONS** |
+| `lib/demo-data.ts` + `lib/demo/seed-data.ts` | Canonical demo constants; seed barrel re-exports for Sprint A.4 import path |
 | `lib/repositories/*.repo.ts` | `isAuthBypassMode()` → in-memory / demo collections; else Supabase |
 | `lib/config.ts` | `isDemoMode()` / `isAuthBypassMode()` gate demo vs live |
 
@@ -129,13 +129,13 @@ Browser → Next.js (RSC + client) → API routes → Repositories → [Demo see
 - [x] **B.3 Orchestrator** — Added `lib/ai/orchestrator.ts` with parallel execution, retries, fallback chain support, and aggregate metrics.
 - [x] **B.4 Citation extraction** — Added `lib/ai/citation-extractor.ts` and integrated citation normalization in orchestration flow.
 - [x] **B.5 Cost optimization** — Added `lib/ai/cache.ts` + `lib/ai/cost-optimizer.ts` with budget guards, fallback model policy, and response cache (memory + optional Redis).
-- [ ] **B.6 Sprint B acceptance checklist complete** (prompt library files + full test matrix)
+- [x] **B.6 Sprint B — prompt library** — Added `lib/ai/prompts/*` (analysis, sentiment, recommendation templates); further wiring optional.
 
 #### Sprint C progress checklist
 
 - [x] **C.1 Redis setup** — `ioredis` + `bullmq`, `lib/env.ts`, `lib/redis/client.ts`, `/api/health/redis`.
-- [x] **C.2 Queue architecture** — `prompt-execution` BullMQ queue module (`lib/queues/*`).
-- [x] **C.3 Workers** — `workers/index.ts` + `npm run workers`.
+- [x] **C.2 Queue architecture** — Queues: `prompt-execution`, `sentiment-analysis`, `recommendation-generation`, `citation-extraction`, `trend-analysis` (`lib/queues/*`, `queue-names.ts`).
+- [x] **C.3 Workers** — `workers/*.worker.ts` + `workers/index.ts` (`npm run workers`).
 - [x] **C.4 Job tracking UI** — `/dashboard/jobs` + `/api/health/queues`.
 - [x] **C.5 Queue wiring** — `POST /api/prompts/[id]/run` enqueues when Redis is configured.
 
