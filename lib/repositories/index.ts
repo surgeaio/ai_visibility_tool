@@ -1,4 +1,5 @@
 export * from "@/lib/repositories/base.repo";
+export * from "@/lib/repositories/errors";
 export * from "@/lib/repositories/prompts.repo";
 export * from "@/lib/repositories/competitors.repo";
 export * from "@/lib/repositories/brands.repo";

@@ -1,7 +1,7 @@
 import IORedis from "ioredis";
 import { getEnv } from "@/lib/env";
 
-let redisClient: IORedis | null = null;
+let redisClient: IORedis | null | undefined;
 
 function createClient() {
   const env = getEnv();
@@ -26,11 +26,35 @@ function createClient() {
   });
 }
 
+/** Dedicated connection for BullMQ (requires `maxRetriesPerRequest: null`). */
+export function createBullMQConnection(): IORedis | null {
+  const env = getEnv();
+  const redisUrl = env.REDIS_URL ?? env.UPSTASH_REDIS_URL;
+  if (!redisUrl) return null;
+
+  if (redisUrl.includes("upstash.io") && env.UPSTASH_REDIS_TOKEN) {
+    const url = new URL(redisUrl);
+    url.username = "default";
+    url.password = env.UPSTASH_REDIS_TOKEN;
+    return new IORedis(url.toString(), {
+      maxRetriesPerRequest: null,
+      lazyConnect: true,
+      enableReadyCheck: false,
+    });
+  }
+
+  return new IORedis(redisUrl, {
+    maxRetriesPerRequest: null,
+    lazyConnect: true,
+    enableReadyCheck: false,
+  });
+}
+
 export function getRedisClient() {
-  if (!redisClient) {
+  if (redisClient === undefined) {
     redisClient = createClient();
   }
-  return redisClient;
+  return redisClient ?? null;
 }
 
 export async function pingRedis(): Promise<boolean> {

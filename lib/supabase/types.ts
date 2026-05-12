@@ -51,3 +51,12 @@ export type RecommendationRow = {
   status: string | null;
   created_at: string;
 };
+
+export type CitationRow = {
+  id: string;
+  brand_id: string;
+  url: string;
+  domain: string;
+  provider: string | null;
+  created_at: string;
+};

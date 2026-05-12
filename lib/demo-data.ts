@@ -1,3 +1,6 @@
+/** Stable id for demo citations API filtering */
+export const DEMO_BRAND_ID = "demo-brand-001";
+
 export const DEMO_BRAND = {
   name: "Attio",
   category: "CRM",
@@ -170,6 +173,33 @@ export const DEMO_SOURCES = [
     citations: 201,
     authority: 71,
     yours: false,
+  },
+];
+
+export const DEMO_CITATIONS = [
+  {
+    id: "c1",
+    brandId: DEMO_BRAND_ID,
+    domain: "g2.com",
+    url: "https://www.g2.com/products/crm",
+    model: "openai",
+    createdAt: "2026-05-10T14:00:00Z",
+  },
+  {
+    id: "c2",
+    brandId: DEMO_BRAND_ID,
+    domain: "attio.com",
+    url: "https://www.attio.com",
+    model: "perplexity",
+    createdAt: "2026-05-10T13:20:00Z",
+  },
+  {
+    id: "c3",
+    brandId: DEMO_BRAND_ID,
+    domain: "hubspot.com",
+    url: "https://www.hubspot.com/products/crm",
+    model: "anthropic",
+    createdAt: "2026-05-09T18:00:00Z",
   },
 ];
 

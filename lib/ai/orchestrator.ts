@@ -77,7 +77,7 @@ export async function executePromptAcrossModels(params: {
         prompt: params.prompt,
         temperature: options.temperature,
       });
-      const cached = getCachedResponse(cacheKey);
+      const cached = await getCachedResponse(cacheKey);
       if (cached) {
         return {
           provider: providerName,
@@ -96,7 +96,7 @@ export async function executePromptAcrossModels(params: {
           ...options,
           model,
         });
-        setCachedResponse(cacheKey, response.rawResponse);
+        await setCachedResponse(cacheKey, response.rawResponse);
         recordSpend(response.cost, "global");
         return response;
       } catch (error) {

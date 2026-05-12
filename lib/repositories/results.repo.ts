@@ -1,10 +1,6 @@
 import type { AnalysisResultRow } from "@/lib/supabase/types";
-import {
-  BaseRepository,
-  DatabaseError,
-  type PaginatedResult,
-  type QueryOptions,
-} from "@/lib/repositories/base.repo";
+import { BaseRepository, type PaginatedResult, type QueryOptions } from "@/lib/repositories/base.repo";
+import { DatabaseError } from "@/lib/repositories/errors";
 
 export interface ResultEntity {
   id: string;
