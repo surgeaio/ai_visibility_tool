@@ -4,19 +4,21 @@ import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DEMO_BRAND_ID } from "@/lib/demo/seed-data";
+import { useSelectedBrand } from "@/lib/context/brand-context";
 
 type Row = { url: string; isIndexed: boolean; coverageState: string | null; indexingIssue: string | null };
 
 export default function NonIndexedPagesPage() {
+  const { selectedBrandId } = useSelectedBrand();
   const [rows, setRows] = useState<Row[]>([]);
   const [source, setSource] = useState<"demo" | "live" | null>(null);
   const [loading, setLoading] = useState(true);
 
   const load = useCallback(async () => {
+    if (!selectedBrandId) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ brandId: DEMO_BRAND_ID, indexed: "false" });
+      const params = new URLSearchParams({ brandId: selectedBrandId, indexed: "false" });
       const res = await fetch(`/api/indexed-pages?${params.toString()}`, { cache: "no-store" });
       const json = (await res.json()) as { source: "demo" | "live"; pages: Row[] };
       setSource(json.source);
@@ -27,7 +29,7 @@ export default function NonIndexedPagesPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBrandId]);
 
   useEffect(() => {
     void load();

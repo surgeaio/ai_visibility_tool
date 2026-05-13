@@ -7,8 +7,8 @@ import { VisibilityTrendChart } from "@/components/charts/VisibilityTrendChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DEMO_BRAND_ID } from "@/lib/demo/seed-data";
 import type { LlmVisibilityPayload } from "@/lib/types/llm-visibility";
+import { useSelectedBrand } from "@/lib/context/brand-context";
 
 type ApiLlmResponse = {
   source: "demo" | "live";
@@ -23,6 +23,7 @@ function sentimentLabel(s: "positive" | "neutral" | "negative") {
 }
 
 export default function LlmVisibilityPage() {
+  const { selectedBrandId } = useSelectedBrand();
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -30,10 +31,11 @@ export default function LlmVisibilityPage() {
   const [payload, setPayload] = useState<LlmVisibilityPayload | null>(null);
 
   const load = useCallback(async () => {
+    if (!selectedBrandId) return;
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ brandId: DEMO_BRAND_ID, range });
+      const params = new URLSearchParams({ brandId: selectedBrandId, range });
       const res = await fetch(`/api/llm-visibility?${params.toString()}`, { cache: "no-store" });
       const json = (await res.json()) as ApiLlmResponse & { error?: string };
       if (!res.ok) {
@@ -47,7 +49,7 @@ export default function LlmVisibilityPage() {
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [range, selectedBrandId]);
 
   useEffect(() => {
     void load();

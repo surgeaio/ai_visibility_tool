@@ -10,9 +10,9 @@ import {
   DEMO_WEBSITE_AUDIT_SUMMARY,
   DEMO_WEBSITE_CRITICAL_ISSUES,
   DEMO_WEBSITE_WARNINGS,
-  DEMO_BRAND_ID,
 } from "@/lib/demo/seed-data";
 import { toast } from "sonner";
+import { useSelectedBrand } from "@/lib/context/brand-context";
 
 type AuditSummary = {
   overallScore: number;
@@ -27,6 +27,7 @@ type AuditSummary = {
 };
 
 export default function WebsiteAuditPage() {
+  const { selectedBrandId } = useSelectedBrand();
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<"demo" | "live" | null>(null);
   const [summary, setSummary] = useState<AuditSummary | null>(null);
@@ -34,9 +35,10 @@ export default function WebsiteAuditPage() {
   const [running, setRunning] = useState(false);
 
   const load = useCallback(async () => {
+    if (!selectedBrandId) return;
     setLoading(true);
     try {
-      const params = new URLSearchParams({ brandId: DEMO_BRAND_ID, range: "30d" });
+      const params = new URLSearchParams({ brandId: selectedBrandId, range: "30d" });
       const res = await fetch(`/api/website-audit/latest?${params.toString()}`, { cache: "no-store" });
       const json = (await res.json()) as {
         source: "demo" | "live";
@@ -68,19 +70,23 @@ export default function WebsiteAuditPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBrandId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
   async function runAudit() {
+    if (!selectedBrandId) {
+      toast.error("Select a client first");
+      return;
+    }
     setRunning(true);
     try {
       const res = await fetch("/api/website-audit/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brandId: DEMO_BRAND_ID, maxPages: 25 }),
+        body: JSON.stringify({ brandId: selectedBrandId, maxPages: 25 }),
       });
       const json = (await res.json()) as { jobId?: string; status?: string; note?: string; error?: string };
       if (!res.ok) throw new Error(json.error ?? "Failed to start crawl");

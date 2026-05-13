@@ -43,10 +43,8 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-black px-4">
       <Card className="w-full max-w-md border-[#262626] bg-[#111]">
         <CardHeader>
-          <CardTitle className="text-white">Log in to Peec AI</CardTitle>
-          <CardDescription className="text-neutral-500">
-            Email magic link or Google — requires Supabase Auth configuration.
-          </CardDescription>
+          <CardTitle className="text-white">AI Visibility CRM</CardTitle>
+          <CardDescription className="text-neutral-500">Track your brand across AI & Google</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <form onSubmit={magicLink} className="space-y-4">

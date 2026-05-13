@@ -12,6 +12,31 @@ export const DEMO_BRAND = {
   },
 };
 
+/** Demo multi-client list (ids stable for filtering when not in auth bypass). */
+export const DEMO_BRANDS_LIST = [
+  {
+    id: DEMO_BRAND_ID,
+    name: "Attio",
+    domain: "attio.com",
+    website: "https://attio.com",
+    category: "CRM",
+  },
+  {
+    id: "demo-brand-002",
+    name: "Easyderma",
+    domain: "easyderma.in",
+    website: "https://easyderma.in",
+    category: "Healthcare",
+  },
+  {
+    id: "demo-brand-003",
+    name: "Kurahomes",
+    domain: "kurahomes.in",
+    website: "https://kurahomes.in",
+    category: "Real estate",
+  },
+] as const;
+
 export const DEMO_COMPETITORS = [
   { id: "c-hubspot", name: "HubSpot", visibility: 75, sentiment: 72, position: 1.8, trend: "up" as const },
   { id: "c-salesforce", name: "Salesforce", visibility: 82, sentiment: 37, position: 1.2, trend: "neutral" as const },

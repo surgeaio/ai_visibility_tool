@@ -8,10 +8,8 @@ import {
   BarChart3,
   BookOpen,
   Bot,
-  CreditCard,
   FileSearch,
   Heart,
-  KeyRound,
   LayoutDashboard,
   Lightbulb,
   Link as LinkIcon,
@@ -33,9 +31,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { DEMO_BRAND, DEMO_RECOMMENDATIONS } from "@/lib/demo/seed-data";
 import { cn } from "@/lib/utils";
 import { useDashboardStore } from "@/store/dashboard";
+import { ClientSelector } from "@/components/layout/ClientSelector";
+import { useSelectedBrand } from "@/lib/context/brand-context";
+import { DEMO_RECOMMENDATIONS } from "@/lib/demo/seed-data";
 
 const TITLE_MAP: Record<string, string> = {
   "/dashboard": "Overview",
@@ -47,8 +47,7 @@ const TITLE_MAP: Record<string, string> = {
   "/dashboard/recommendations": "Recommendations",
   "/dashboard/jobs": "Jobs",
   "/dashboard/settings": "Profile & workspace",
-  "/dashboard/settings/api-keys": "API Keys",
-  "/dashboard/settings/billing": "Billing",
+  "/dashboard/brands/new": "Add client",
   "/dashboard/llm-visibility": "LLM Visibility",
   "/dashboard/google-rankings": "Google Rankings",
   "/dashboard/analytics": "Analytics",
@@ -57,8 +56,6 @@ const TITLE_MAP: Record<string, string> = {
 };
 
 function resolvePageTitle(pathname: string): string {
-  if (pathname.startsWith("/dashboard/settings/api-keys")) return "API Keys";
-  if (pathname.startsWith("/dashboard/settings/billing")) return "Billing";
   if (pathname.startsWith("/dashboard/llm-visibility/")) return "LLM prompt detail";
   if (pathname.startsWith("/dashboard/llm-visibility")) return "LLM Visibility";
   if (pathname.startsWith("/dashboard/google-rankings/")) return "Keyword detail";
@@ -112,11 +109,7 @@ const NAV_SECTIONS: NavSection[] = [
   },
   {
     label: "Settings",
-    items: [
-      { href: "/dashboard/settings", label: "Profile", icon: Settings, match: "exact" },
-      { href: "/dashboard/settings/api-keys", label: "API keys", icon: KeyRound, match: "prefix" },
-      { href: "/dashboard/settings/billing", label: "Billing", icon: CreditCard, match: "prefix" },
-    ],
+    items: [{ href: "/dashboard/settings", label: "Profile", icon: Settings, match: "exact" }],
   },
 ];
 
@@ -127,24 +120,13 @@ function isNavActive(pathname: string, item: NavItem): boolean {
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
-  const brandName = useDashboardStore((s) => s.brandName);
-  const setBrandName = useDashboardStore((s) => s.setBrandName);
+  const { selectedBrandId, setSelectedBrandId } = useSelectedBrand();
 
   return (
     <div className="flex h-full flex-col">
       <div className="border-b border-[#262626] p-4">
-        <p className="mb-2 text-xxs font-medium uppercase tracking-wide text-neutral-500">Brand</p>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="secondary" className="w-full justify-between font-normal">
-              <span className="truncate">{brandName}</span>
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="w-[200px]">
-            <DropdownMenuItem onClick={() => setBrandName(DEMO_BRAND.name)}>{DEMO_BRAND.name}</DropdownMenuItem>
-            <DropdownMenuItem onClick={() => setBrandName("Acme Co")}>Acme Co</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <p className="mb-2 text-xxs font-medium uppercase tracking-wide text-neutral-500">Client</p>
+        <ClientSelector selectedBrandId={selectedBrandId} onSelect={setSelectedBrandId} />
       </div>
       <nav className="flex-1 space-y-4 overflow-y-auto p-3">
         {NAV_SECTIONS.map((section) => (

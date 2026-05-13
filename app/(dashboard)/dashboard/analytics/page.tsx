@@ -14,11 +14,11 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
-  DEMO_BRAND_ID,
   DEMO_CHART_DATA,
   DEMO_LLM_FORECAST_SERIES,
   DEMO_KEYWORD_RANK_FORECAST,
 } from "@/lib/demo/seed-data";
+import { useSelectedBrand } from "@/lib/context/brand-context";
 
 const multiTrend = DEMO_CHART_DATA.visibility.map((row) => ({
   label: row.month,
@@ -47,13 +47,15 @@ type Predictive = {
 };
 
 export default function AnalyticsPage() {
+  const { selectedBrandId } = useSelectedBrand();
   const [loading, setLoading] = useState(true);
   const [descriptive, setDescriptive] = useState<Descriptive | null>(null);
   const [diagnostic, setDiagnostic] = useState<Diagnostic | null>(null);
   const [predictive, setPredictive] = useState<Predictive | null>(null);
 
   useEffect(() => {
-    const q = new URLSearchParams({ brandId: DEMO_BRAND_ID, range: "30d" });
+    if (!selectedBrandId) return;
+    const q = new URLSearchParams({ brandId: selectedBrandId, range: "30d" });
     let cancelled = false;
     void (async () => {
       setLoading(true);
@@ -80,7 +82,7 @@ export default function AnalyticsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [selectedBrandId]);
 
   const d = descriptive;
   const dg = diagnostic;

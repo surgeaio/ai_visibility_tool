@@ -6,7 +6,9 @@ import { RankPositionChart } from "@/components/charts/RankPositionChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DEMO_BRAND, DEMO_BRAND_ID } from "@/lib/demo/seed-data";
+import { DEMO_BRAND } from "@/lib/demo/seed-data";
+import { useSelectedBrand } from "@/lib/context/brand-context";
+import { useDashboardStore } from "@/store/dashboard";
 
 type GoogleSummary = {
   avgPosition: number;
@@ -30,16 +32,19 @@ type GoogleRankingsApi = {
 };
 
 export default function GoogleRankingsPage() {
+  const { selectedBrandId } = useSelectedBrand();
+  const brandName = useDashboardStore((s) => s.brandName);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<GoogleRankingsApi | null>(null);
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
 
   const load = useCallback(async () => {
+    if (!selectedBrandId) return;
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ brandId: DEMO_BRAND_ID, range });
+      const params = new URLSearchParams({ brandId: selectedBrandId, range });
       const res = await fetch(`/api/google-rankings?${params.toString()}`, { cache: "no-store" });
       const json = (await res.json()) as GoogleRankingsApi;
       if (!res.ok) {
@@ -52,13 +57,13 @@ export default function GoogleRankingsPage() {
     } finally {
       setLoading(false);
     }
-  }, [range]);
+  }, [range, selectedBrandId]);
 
   useEffect(() => {
     void load();
   }, [load]);
 
-  const siteName = data?.source === "demo" ? DEMO_BRAND.name : DEMO_BRAND.name;
+  const siteName = brandName || DEMO_BRAND.name;
   const s = data?.summary;
   const lastSync = data?.lastSyncedAt
     ? new Date(data.lastSyncedAt).toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" })

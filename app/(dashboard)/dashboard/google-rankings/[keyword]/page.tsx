@@ -1,9 +1,13 @@
+"use client";
+
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DEMO_BRAND, getDemoKeywordDiagnostic } from "@/lib/demo/seed-data";
+import { getDemoKeywordDiagnostic } from "@/lib/demo/seed-data";
 import { cn } from "@/lib/utils";
+import { useDashboardStore } from "@/store/dashboard";
 
 export default function GoogleKeywordDetailPage({ params }: { params: { keyword: string } }) {
+  const brandName = useDashboardStore((s) => s.brandName);
   const keyword = decodeURIComponent(params.keyword);
   const d = getDemoKeywordDiagnostic(keyword);
 
@@ -114,7 +118,7 @@ export default function GoogleKeywordDetailPage({ params }: { params: { keyword:
         <CardContent className="text-sm text-neutral-300">
           <p>{d.prediction}</p>
           <p className="mt-3 text-xs text-neutral-500">
-            Brand context: <span className="text-neutral-400">{DEMO_BRAND.name}</span>
+            Brand context: <span className="text-neutral-400">{brandName}</span>
           </p>
         </CardContent>
       </Card>

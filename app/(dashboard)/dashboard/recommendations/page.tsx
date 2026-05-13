@@ -4,11 +4,11 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DEMO_BRAND_ID } from "@/lib/demo/seed-data";
 import type { RecommendationEntity } from "@/lib/repositories/recommendations.repo";
 import { useDashboardStore } from "@/store/dashboard";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { useSelectedBrand } from "@/lib/context/brand-context";
 
 type TabKey = "all" | "llm" | "google" | "website" | "competitor";
 
@@ -24,6 +24,7 @@ function tabMatch(tab: TabKey, r: RecommendationEntity): boolean {
 }
 
 export default function RecommendationsPage() {
+  const { selectedBrandId } = useSelectedBrand();
   const completed = useDashboardStore((s) => s.recommendationCompleted);
   const toggle = useDashboardStore((s) => s.toggleRecommendationDone);
   const [priority, setPriority] = useState<string>("all");
@@ -36,11 +37,12 @@ export default function RecommendationsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!selectedBrandId) return;
     setLoading(true);
     setError(null);
     try {
       const params = new URLSearchParams({
-        brandId: DEMO_BRAND_ID,
+        brandId: selectedBrandId,
         limit: "50",
         offset: "0",
       });
@@ -58,7 +60,7 @@ export default function RecommendationsPage() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedBrandId]);
 
   useEffect(() => {
     void load();
@@ -78,12 +80,16 @@ export default function RecommendationsPage() {
   const doneCount = items.filter((r) => !!completed[r.id] || r.status === "completed").length;
 
   async function handleGenerate() {
+    if (!selectedBrandId) {
+      toast.error("Select a client first");
+      return;
+    }
     setGenerating(true);
     try {
       const res = await fetch("/api/recommendations/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brandId: DEMO_BRAND_ID }),
+        body: JSON.stringify({ brandId: selectedBrandId }),
       });
       const json = (await res.json()) as { jobId?: string; status?: string; note?: string; error?: string };
       if (!res.ok) throw new Error(json.error ?? "Generate failed");
