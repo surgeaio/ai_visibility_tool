@@ -43,8 +43,10 @@ export default function LoginPage() {
     <div className="flex min-h-screen flex-col items-center justify-center bg-black px-4">
       <Card className="w-full max-w-md border-[#262626] bg-[#111]">
         <CardHeader>
-          <CardTitle className="text-white">AI Visibility CRM</CardTitle>
-          <CardDescription className="text-neutral-500">Track your brand across AI & Google</CardDescription>
+          <CardTitle className="text-white">Surgeaio AI Visibility Tool</CardTitle>
+          <CardDescription className="text-neutral-500">
+            Track your brand across AI & Google. Email magic link or Google — requires Supabase Auth configuration.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <form onSubmit={magicLink} className="space-y-4">

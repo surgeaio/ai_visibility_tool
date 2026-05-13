@@ -12,9 +12,9 @@
     "workers": "tsx workers/index.ts",
     "scheduler": "tsx lib/scheduler/cron-runner.ts",
     "db:seed": "tsx scripts/seed.ts",
-    "db:migrate": "supabase migration up",
-    "db:reset": "supabase db reset",
-    "db:types": "supabase gen types typescript --local --schema public > lib/supabase/database.types.ts",
+    "db:migrate": "npx supabase migration up",
+    "db:reset": "npx supabase db reset",
+    "db:types": "node scripts/write-supabase-types.mjs",
     "setup": "npm install",
     "verify": "npm run typecheck && npm run lint && npm run build"
   },

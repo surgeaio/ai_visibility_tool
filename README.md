@@ -1,4 +1,4 @@
-# AI Visibility Platform
+# Surgeaio AI Visibility Tool
 
 Next.js 14 (App Router) dashboard for **generative engine visibility**: prompts, competitors, sentiment, sources, recommendations, and optional BullMQ job execution.
 
@@ -20,6 +20,8 @@ Open [http://localhost:3000](http://localhost:3000). With no Supabase keys, **de
 | `npm run workers` | BullMQ worker (`REDIS_URL` required for real processing) |
 | `npm run scheduler` | Hourly HTTP ping to `/api/cron/run-schedules` when `APP_URL` + `CRON_SECRET` are set |
 | `npm run verify` | `typecheck` + `lint` + `build` |
+| `npm run db:migrate` | Apply SQL migrations to **local** Postgres (`npx supabase start` / Docker required) |
+| `npm run db:types` | Regenerate `lib/supabase/database.types.ts` from local DB (writes only on success; requires `supabase start`) |
 | `npm run db:seed` | Optional seed helper (needs service role key) |
 
 ## Docs
