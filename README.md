@@ -11,6 +11,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). With no Supabase keys, **demo / auth bypass** mode serves seeded UI data (see `lib/config.ts`).
 
+**Intelligence phase:** set `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (and optional `GOOGLE_AI_API_KEY`, `PERPLEXITY_API_KEY`) for real model calls. Use `STRICT_LLM_EXECUTION=true` in production to forbid synthetic LLM placeholder text when a key is missing. Run **`npm run dev:full`** for Next.js + BullMQ workers + scheduler (requires `REDIS_URL`).
+
 ## Scripts
 
 | Script | Description |

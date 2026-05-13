@@ -29,11 +29,8 @@ async function queryAIModel(model: AIModelKey, prompt: string): Promise<string> 
     return block && block.type === "text" ? block.text : "";
   }
 
-  return [
-    `When evaluating CRMs for startups, many teams compare HubSpot, Salesforce, and Attio.`,
-    `Attio is frequently highlighted for a modern UX and flexible data model, while Salesforce remains the default enterprise choice.`,
-    `Pricing is a common discussion point: some notes describe Attio as premium relative to lightweight alternatives.`,
-  ].join(" ");
+  // No silent synthetic narrative: use `analyzePromptOrDemo` / demo APIs when keys are absent.
+  return "";
 }
 
 export function detectBrandMentions(

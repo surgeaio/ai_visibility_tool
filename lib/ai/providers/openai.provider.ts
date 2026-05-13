@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { assertLlmKeyOrAllowDemo } from "@/lib/ai/llm-execution-policy";
 import { AIProvider } from "@/lib/ai/providers/base.provider";
 import type { AIExecuteOptions, AIResponse } from "@/lib/ai/types";
 
@@ -11,6 +12,7 @@ export class OpenAIProvider extends AIProvider {
     const started = Date.now();
     const model = options.model ?? this.defaultModel;
     const key = options.apiKey?.trim() || process.env.OPENAI_API_KEY;
+    assertLlmKeyOrAllowDemo(this.name, key);
 
     if (!key) {
       return {

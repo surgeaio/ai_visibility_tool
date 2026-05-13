@@ -11,6 +11,15 @@ export function isDemoMode() {
   return !hasOpenAI() && !hasAnthropic();
 }
 
+/**
+ * When true, LLM providers must not return synthetic "Demo … response" text; callers get a thrown error if keys are missing.
+ * Set in production stacks where accidental simulation is unacceptable. Default false preserves local dev without keys.
+ */
+export function isStrictLlmExecution(): boolean {
+  const v = process.env.STRICT_LLM_EXECUTION?.trim().toLowerCase();
+  return v === "true" || v === "1" || v === "yes";
+}
+
 /** True when auth enforcement should be skipped (explicit demo flag or Supabase not configured). */
 export function isAuthBypassMode(): boolean {
   if (process.env.DEMO_MODE === "true") return true;
