@@ -44,12 +44,22 @@ export type CompetitorRow = {
 
 export type RecommendationRow = {
   id: string;
-  brand_id: string;
+  brand_id: string | null;
+  pattern_id: string | null;
   pattern_type: string | null;
   action: string | null;
+  description: string | null;
   priority: string | null;
+  category: string | null;
+  expected_geo_gain: number | null;
   status: string | null;
   created_at: string;
+  difficulty?: string | null;
+  estimated_time?: string | null;
+  implementation_steps?: unknown;
+  success_metrics?: unknown;
+  evidence?: unknown;
+  impact_score?: number | null;
 };
 
 export type CitationRow = {

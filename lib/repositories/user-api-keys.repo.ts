@@ -1,9 +1,21 @@
 import { isAuthBypassMode } from "@/lib/config";
-import { encryptApiKey, getKeyPreview } from "@/lib/crypto/encryption";
+import { decryptApiKey, encryptApiKey, getKeyPreview } from "@/lib/crypto/encryption";
 import { DEMO_USER_API_KEYS_SEED } from "@/lib/demo/seed-data";
 import { DatabaseError } from "@/lib/repositories/errors";
+import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import type { ApiKeyProvider } from "@/lib/validators/api-keys.schema";
+
+type LlmKeyProvider = Extract<
+  ApiKeyProvider,
+  "openai" | "anthropic" | "gemini" | "perplexity"
+>;
+
+const LLM_KEY_PROVIDERS: readonly LlmKeyProvider[] = ["openai", "anthropic", "gemini", "perplexity"];
+
+function isLlmKeyProvider(p: ApiKeyProvider): p is LlmKeyProvider {
+  return (LLM_KEY_PROVIDERS as readonly string[]).includes(p);
+}
 
 export interface UserApiKeyListItem {
   id: string;
@@ -194,5 +206,43 @@ export class UserApiKeysRepository {
       .eq("id", id)
       .eq("user_id", userId);
     if (error) throw new DatabaseError(error.message);
+  }
+
+  /** At least one active LLM provider key (for prompt runs). */
+  async hasAnyActiveLlmKey(userId: string): Promise<boolean> {
+    const keys = await this.listActiveLlmKeysDecrypted(userId);
+    return keys.length > 0;
+  }
+
+  /**
+   * Decrypted keys for workers (service role). Demo mode uses in-memory demo store.
+   */
+  async listActiveLlmKeysDecrypted(userId: string): Promise<Array<{ provider: LlmKeyProvider; apiKey: string }>> {
+    if (isAuthBypassMode()) {
+      const out: Array<{ provider: LlmKeyProvider; apiKey: string }> = [];
+      for (const k of getDemoStore()) {
+        if (!k.isActive || !isLlmKeyProvider(k.provider)) continue;
+        out.push({ provider: k.provider, apiKey: decryptApiKey(k.encryptedKey) });
+      }
+      return out;
+    }
+    const admin = tryCreateAdminSupabaseClient();
+    if (!admin) {
+      return [];
+    }
+    const { data, error } = await admin
+      .from("user_api_keys")
+      .select("provider, encrypted_key, is_active")
+      .eq("user_id", userId)
+      .eq("is_active", true)
+      .in("provider", [...LLM_KEY_PROVIDERS]);
+    if (error) throw new DatabaseError(error.message);
+    const rows = (data ?? []) as { provider: string; encrypted_key: string }[];
+    return rows
+      .filter((r) => isLlmKeyProvider(r.provider as ApiKeyProvider))
+      .map((r) => ({
+        provider: r.provider as LlmKeyProvider,
+        apiKey: decryptApiKey(r.encrypted_key),
+      }));
   }
 }

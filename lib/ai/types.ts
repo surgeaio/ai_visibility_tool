@@ -16,6 +16,8 @@ export interface AIExecuteOptions {
   timeoutMs?: number;
   systemPrompt?: string;
   requestId: string;
+  /** When set (e.g. user-stored key), overrides env-based API keys. */
+  apiKey?: string;
 }
 
 export interface AIResponse {

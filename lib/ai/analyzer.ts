@@ -36,7 +36,7 @@ async function queryAIModel(model: AIModelKey, prompt: string): Promise<string> 
   ].join(" ");
 }
 
-function detectBrandMentions(
+export function detectBrandMentions(
   response: string,
   brands: string[],
 ): { mentioned: boolean; positions: Record<string, number>; snippets: Record<string, string> } {

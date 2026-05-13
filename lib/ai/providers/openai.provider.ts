@@ -10,7 +10,7 @@ export class OpenAIProvider extends AIProvider {
   async execute(prompt: string, options: AIExecuteOptions): Promise<AIResponse> {
     const started = Date.now();
     const model = options.model ?? this.defaultModel;
-    const key = process.env.OPENAI_API_KEY;
+    const key = options.apiKey?.trim() || process.env.OPENAI_API_KEY;
 
     if (!key) {
       return {
@@ -45,7 +45,7 @@ export class OpenAIProvider extends AIProvider {
       rawResponse: response.choices[0]?.message?.content ?? "",
       citations: [],
       tokensUsed: { input: inputTokens, output: outputTokens },
-      cost: this.estimateCost(inputTokens, outputTokens),
+      cost: this.estimateCost(inputTokens, outputTokens, model),
       latency: Date.now() - started,
       timestamp: new Date(),
       requestId: options.requestId,
@@ -56,7 +56,13 @@ export class OpenAIProvider extends AIProvider {
     return Boolean(process.env.OPENAI_API_KEY?.trim());
   }
 
-  estimateCost(inputTokens: number, outputTokens: number): number {
+  estimateCost(inputTokens: number, outputTokens: number, model?: string): number {
+    const m = model ?? this.defaultModel;
+    if (m.includes("gpt-4o-mini")) {
+      const inputCost = (inputTokens / 1_000_000) * 0.15;
+      const outputCost = (outputTokens / 1_000_000) * 0.6;
+      return Number((inputCost + outputCost).toFixed(6));
+    }
     const inputCost = (inputTokens / 1_000_000) * 5;
     const outputCost = (outputTokens / 1_000_000) * 15;
     return Number((inputCost + outputCost).toFixed(6));

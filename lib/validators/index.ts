@@ -6,3 +6,5 @@ export * from "@/lib/validators/analysis.schema";
 export * from "@/lib/validators/recommendations.schema";
 export * from "@/lib/validators/api-keys.schema";
 export * from "@/lib/validators/citations.schema";
+export * from "@/lib/validators/llm-visibility.schema";
+export * from "@/lib/validators/google-rankings.schema";

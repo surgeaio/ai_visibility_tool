@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const queryValidation = validateQuery(req, listRecommendationsQuerySchema, requestId);
   if (!queryValidation.success) return queryValidation.response;
 
-  const { status, priority, category, search, limit, offset, sortBy, sortOrder } =
+  const { status, priority, category, search, limit, offset, sortBy, sortOrder, brandId } =
     queryValidation.data;
 
   try {
@@ -22,7 +22,7 @@ export async function GET(req: Request) {
       sortBy,
       sortOrder,
       pagination: { limit, offset },
-      filters: { status, priority, category },
+      filters: { status, priority, category, ...(brandId ? { brandId } : {}) },
     });
     return Response.json({ recommendations: items, total, requestId });
   } catch (error) {

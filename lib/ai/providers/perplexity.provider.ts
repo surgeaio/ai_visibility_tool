@@ -15,7 +15,7 @@ export class PerplexityProvider extends AIProvider {
   async execute(prompt: string, options: AIExecuteOptions): Promise<AIResponse> {
     const started = Date.now();
     const model = options.model ?? this.defaultModel;
-    const key = process.env.PERPLEXITY_API_KEY;
+    const key = options.apiKey?.trim() || process.env.PERPLEXITY_API_KEY;
     if (!key) {
       return {
         provider: this.name,
@@ -62,7 +62,7 @@ export class PerplexityProvider extends AIProvider {
       rawResponse: payload.choices?.[0]?.message?.content ?? "",
       citations,
       tokensUsed: { input: inputTokens, output: outputTokens },
-      cost: this.estimateCost(inputTokens, outputTokens),
+      cost: this.estimateCost(inputTokens, outputTokens, model),
       latency: Date.now() - started,
       timestamp: new Date(),
       requestId: options.requestId,
@@ -73,7 +73,8 @@ export class PerplexityProvider extends AIProvider {
     return Boolean(process.env.PERPLEXITY_API_KEY?.trim());
   }
 
-  estimateCost(inputTokens: number, outputTokens: number): number {
+  estimateCost(inputTokens: number, outputTokens: number, _model?: string): number {
+    void _model;
     const inputCost = (inputTokens / 1_000_000) * 1;
     const outputCost = (outputTokens / 1_000_000) * 1;
     return Number((inputCost + outputCost).toFixed(6));
