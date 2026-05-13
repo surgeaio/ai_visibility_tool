@@ -5,7 +5,7 @@ import { Toaster } from "sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "AI Visibility CRM — Track your brand across AI & Google",
+  title: "Surgeaio AI Visibility Tool — Track your brand across AI & Google",
   description:
     "Track, analyze, and improve brand performance on AI search platforms through Visibility, Position, and Sentiment.",
 };
