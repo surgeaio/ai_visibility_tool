@@ -7,3 +7,4 @@ export * from "@/lib/repositories/results.repo";
 export * from "@/lib/repositories/recommendations.repo";
 export * from "@/lib/repositories/citations.repo";
 export * from "@/lib/repositories/analytics.repo";
+export * from "@/lib/repositories/user-api-keys.repo";

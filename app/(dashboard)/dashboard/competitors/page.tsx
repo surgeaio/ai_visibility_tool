@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useState } from "react";
 import { ArrowDownRight, ArrowUpRight, Minus, Plus } from "lucide-react";
 import { SentimentBadge } from "@/components/dashboard/SentimentBadge";
@@ -30,7 +31,6 @@ const YOUR_ROW = {
 export default function CompetitorsPage() {
   const [competitors, setCompetitors] = useState(DEMO_COMPETITORS);
   const [openAdd, setOpenAdd] = useState(false);
-  const [detailName, setDetailName] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
 
   const rows = [YOUR_ROW, ...competitors.map((c) => ({
@@ -71,13 +71,17 @@ export default function CompetitorsPage() {
               <Button
                 onClick={() => {
                   if (!newName.trim()) return;
-                  setCompetitors((c) => [...c, {
-                    name: newName.trim(),
-                    visibility: 45,
-                    sentiment: 60,
-                    position: 3,
-                    trend: "neutral" as const,
-                  }]);
+                  setCompetitors((c) => [
+                    ...c,
+                    {
+                      id: crypto.randomUUID(),
+                      name: newName.trim(),
+                      visibility: 45,
+                      sentiment: 60,
+                      position: 3,
+                      trend: "neutral" as const,
+                    },
+                  ]);
                   setNewName("");
                   setOpenAdd(false);
                 }}
@@ -91,7 +95,7 @@ export default function CompetitorsPage() {
 
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {competitors.map((c) => (
-          <Card key={c.name}>
+          <Card key={c.id}>
             <CardHeader className="pb-2">
               <div className="flex items-center justify-between">
                 <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#1a1a1a] text-sm font-semibold">
@@ -114,8 +118,8 @@ export default function CompetitorsPage() {
                 <span>Avg position</span>
                 <span className="font-mono text-white">{c.position}</span>
               </div>
-              <Button variant="secondary" className="mt-2 w-full" size="sm" onClick={() => setDetailName(c.name)}>
-                View detail
+              <Button variant="secondary" className="mt-2 w-full" size="sm" asChild>
+                <Link href={`/dashboard/competitors/${encodeURIComponent(c.id)}`}>View detail</Link>
               </Button>
             </CardContent>
           </Card>
@@ -151,38 +155,6 @@ export default function CompetitorsPage() {
         </table>
       </div>
 
-      <Dialog open={!!detailName} onOpenChange={(o) => !o && setDetailName(null)}>
-        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
-          <DialogHeader>
-            <DialogTitle>{detailName} · AI signals</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4 text-sm text-neutral-300">
-            <div>
-              <p className="text-xs font-medium uppercase text-neutral-500">Top prompts</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5">
-                <li>Enterprise CRM migration</li>
-                <li>Best CRM for startups</li>
-                <li>Pricing vs alternatives</li>
-              </ul>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase text-neutral-500">Sentiment breakdown</p>
-              <p className="mt-2 text-neutral-400">Positive 54% · Neutral 36% · Negative 10%</p>
-            </div>
-            <div>
-              <p className="text-xs font-medium uppercase text-neutral-500">Keywords</p>
-              <p className="mt-2">enterprise, ecosystem, onboarding, integrations, pricing</p>
-            </div>
-            <div className="rounded-lg border border-[#262626] bg-[#0a0a0a] p-4">
-              <p className="text-xs font-medium uppercase text-amber-400">Gap analysis</p>
-              <p className="mt-2 text-neutral-400">
-                You have fewer cited comparison pages vs {detailName} on integration-heavy prompts—prioritize middleware
-                + marketplace narrative.
-              </p>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }

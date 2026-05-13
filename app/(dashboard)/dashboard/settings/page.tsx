@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -12,6 +13,14 @@ export default function SettingsPage() {
       <div>
         <h2 className="text-lg font-semibold text-white">Settings</h2>
         <p className="text-sm text-neutral-500">Workspace preferences and integrations (demo UI).</p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/dashboard/settings/api-keys">API keys</Link>
+          </Button>
+          <Button asChild variant="secondary" size="sm">
+            <Link href="/dashboard/settings/billing">Billing</Link>
+          </Button>
+        </div>
       </div>
 
       <Card>
