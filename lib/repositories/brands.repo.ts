@@ -1,26 +1,30 @@
 import type { BrandRow } from "@/lib/supabase/types";
 import { BaseRepository, type PaginatedResult, type QueryOptions } from "@/lib/repositories/base.repo";
 import { DatabaseError } from "@/lib/repositories/errors";
-import { DEMO_BRAND, DEMO_BRAND_ID } from "@/lib/demo/seed-data";
+import { DEMO_BRANDS_LIST } from "@/lib/demo/seed-data";
 
 export interface BrandEntity {
   id: string;
   name: string;
   website: string | null;
+  domain: string | null;
   category: string | null;
   createdAt: string;
 }
 
 export interface BrandCreateInput {
   name: string;
-  website?: string;
-  category?: string;
+  website?: string | null;
+  category?: string | null;
+  domain?: string | null;
+  userId?: string | null;
 }
 
 export interface BrandUpdateInput {
   name?: string;
   website?: string;
   category?: string;
+  domain?: string;
 }
 
 function toBrandEntity(row: BrandRow): BrandEntity {
@@ -28,25 +32,28 @@ function toBrandEntity(row: BrandRow): BrandEntity {
     id: row.id,
     name: row.name,
     website: row.website,
+    domain: row.domain ?? null,
     category: row.category,
     createdAt: row.created_at,
   };
 }
 
-export class BrandsRepository extends BaseRepository<
-  BrandEntity,
-  BrandCreateInput,
-  BrandUpdateInput
-> {
+function demoBrandToEntity(row: (typeof DEMO_BRANDS_LIST)[number]): BrandEntity {
+  return {
+    id: row.id,
+    name: row.name,
+    website: row.website,
+    domain: row.domain,
+    category: row.category,
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export class BrandsRepository extends BaseRepository<BrandEntity, BrandCreateInput, BrandUpdateInput> {
   async findById(id: string): Promise<BrandEntity | null> {
     if (this.isDemoMode()) {
-      return {
-        id: DEMO_BRAND_ID,
-        name: DEMO_BRAND.name,
-        website: "https://attio.com",
-        category: DEMO_BRAND.category,
-        createdAt: new Date().toISOString(),
-      };
+      const row = DEMO_BRANDS_LIST.find((b) => b.id === id);
+      return demoBrandToEntity(row ?? DEMO_BRANDS_LIST[0]);
     }
     const supabase = await this.getClient();
     const { data, error } = await supabase.from("brands").select("*").eq("id", id).maybeSingle();
@@ -59,18 +66,8 @@ export class BrandsRepository extends BaseRepository<
     const limit = options.pagination?.limit ?? 20;
     const offset = options.pagination?.offset ?? 0;
     if (this.isDemoMode()) {
-      return {
-        items: [
-          {
-            id: DEMO_BRAND_ID,
-            name: DEMO_BRAND.name,
-            website: "https://attio.com",
-            category: DEMO_BRAND.category,
-            createdAt: new Date().toISOString(),
-          },
-        ],
-        total: 1,
-      };
+      const all = DEMO_BRANDS_LIST.map(demoBrandToEntity);
+      return this.paginateArray(all, { limit, offset });
     }
     const supabase = await this.getClient();
     const { data, error, count } = await supabase
@@ -88,6 +85,7 @@ export class BrandsRepository extends BaseRepository<
         id: crypto.randomUUID(),
         name: input.name,
         website: input.website ?? null,
+        domain: input.domain ?? null,
         category: input.category ?? null,
         createdAt: new Date().toISOString(),
       };
@@ -98,7 +96,9 @@ export class BrandsRepository extends BaseRepository<
       .insert({
         name: input.name,
         website: input.website ?? null,
+        domain: input.domain ?? null,
         category: input.category ?? null,
+        user_id: input.userId ?? null,
       })
       .select("*")
       .single();
@@ -115,6 +115,7 @@ export class BrandsRepository extends BaseRepository<
         name: input.name ?? found.name,
         website: input.website ?? found.website,
         category: input.category ?? found.category,
+        domain: input.domain ?? found.domain,
       };
     }
     const supabase = await this.getClient();
@@ -124,6 +125,7 @@ export class BrandsRepository extends BaseRepository<
         name: input.name,
         website: input.website,
         category: input.category,
+        domain: input.domain,
       })
       .eq("id", id)
       .select("*")

@@ -23,6 +23,16 @@ export const createBrandSchema = z.object({
   aliases: z.array(z.string().trim().min(1).max(100)).max(30).optional(),
 });
 
+/** Minimal client create (sidebar “Add new client”) */
+export const quickClientBrandSchema = z.object({
+  name: z.string().trim().min(2).max(120),
+  domain: domainSchema,
+  website: z
+    .union([z.literal(""), urlSchema])
+    .optional()
+    .transform((v) => (v === "" ? undefined : v)),
+});
+
 export const updateBrandSchema = createBrandSchema
   .partial()
   .refine((data) => Object.keys(data).length > 0, {

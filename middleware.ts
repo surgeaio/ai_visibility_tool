@@ -21,6 +21,19 @@ export async function middleware(request: NextRequest) {
     return res;
   };
 
+  const hiddenFromClients = [
+    "/dashboard/settings/api-keys",
+    "/dashboard/settings/billing",
+    "/dashboard/billing",
+  ];
+  if (hiddenFromClients.some((route) => pathname === route || pathname.startsWith(`${route}/`))) {
+    return attachRequestId(NextResponse.redirect(new URL("/dashboard", request.url)));
+  }
+
+  if (pathname === "/") {
+    return attachRequestId(NextResponse.redirect(new URL("/login", request.url)));
+  }
+
   if (isAuthBypassMode()) {
     return attachRequestId(NextResponse.next({ request }));
   }
@@ -60,5 +73,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/dashboard/:path*", "/api/:path*"],
+  matcher: ["/", "/dashboard/:path*", "/api/:path*"],
 };

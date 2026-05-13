@@ -18,9 +18,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DEMO_COMPETITORS } from "@/lib/demo/seed-data";
 import { cn } from "@/lib/utils";
+import { useDashboardStore } from "@/store/dashboard";
 
-const YOUR_ROW = {
-  name: "Attio",
+const YOUR_ROW_BASE = {
   visibility: 63,
   sentiment: 89,
   position: 2.4,
@@ -29,6 +29,8 @@ const YOUR_ROW = {
 };
 
 export default function CompetitorsPage() {
+  const brandName = useDashboardStore((s) => s.brandName);
+  const YOUR_ROW = { name: brandName, ...YOUR_ROW_BASE };
   const [competitors, setCompetitors] = useState(DEMO_COMPETITORS);
   const [openAdd, setOpenAdd] = useState(false);
   const [newName, setNewName] = useState("");

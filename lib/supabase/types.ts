@@ -4,6 +4,7 @@ export type BrandRow = {
   user_id: string | null;
   name: string;
   website: string | null;
+  domain: string | null;
   category: string | null;
   created_at: string;
 };

@@ -5,7 +5,7 @@ import { BookOpen, RefreshCw } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DEMO_BRAND_ID } from "@/lib/demo/seed-data";
+import { useSelectedBrand } from "@/lib/context/brand-context";
 
 type CitationRow = {
   id: string;
@@ -17,16 +17,18 @@ type CitationRow = {
 };
 
 export default function CitationsDashboardPage() {
+  const { selectedBrandId } = useSelectedBrand();
   const [items, setItems] = useState<CitationRow[]>([]);
   const [total, setTotal] = useState(0);
   const [status, setStatus] = useState<"idle" | "loading" | "error">("idle");
   const [error, setError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
+    if (!selectedBrandId) return;
     setStatus("loading");
     setError(null);
     try {
-      const params = new URLSearchParams({ limit: "50", offset: "0", brandId: DEMO_BRAND_ID });
+      const params = new URLSearchParams({ limit: "50", offset: "0", brandId: selectedBrandId });
       const res = await fetch(`/api/citations?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) {
         throw new Error(await res.text());
@@ -39,7 +41,7 @@ export default function CitationsDashboardPage() {
       setStatus("error");
       setError(e instanceof Error ? e.message : "Failed to load citations");
     }
-  }, []);
+  }, [selectedBrandId]);
 
   useEffect(() => {
     void load();
