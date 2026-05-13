@@ -1,12 +1,13 @@
 import type { SentimentResult } from "./types";
-import { hasOpenAI } from "@/lib/config";
 import OpenAI from "openai";
 
 export async function analyzeSentiment(
   text: string,
   brandName: string,
+  opts?: { openAiApiKey?: string },
 ): Promise<SentimentResult> {
-  if (!hasOpenAI()) {
+  const key = opts?.openAiApiKey?.trim() || process.env.OPENAI_API_KEY?.trim();
+  if (!key) {
     const score = text.toLowerCase().includes("negative") || text.toLowerCase().includes("expensive")
       ? 38
       : text.toLowerCase().includes("praised") || text.toLowerCase().includes("best")
@@ -24,7 +25,7 @@ export async function analyzeSentiment(
     };
   }
 
-  const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+  const openai = new OpenAI({ apiKey: key });
   const response = await openai.chat.completions.create({
     model: "gpt-4o",
     messages: [

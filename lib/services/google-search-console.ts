@@ -1,3 +1,6 @@
+import type { OAuth2Client } from "google-auth-library";
+import { google } from "googleapis";
+
 export interface SearchAnalyticsRow {
   keys: string[];
   clicks: number;
@@ -11,31 +14,60 @@ export interface SiteSummary {
   permissionLevel: string;
 }
 
-/** Google Search Console — OAuth + sync to be completed; methods are typed stubs. */
-export class GoogleSearchConsoleService {
-  async authenticate(_userId: string): Promise<null> {
-    void _userId;
-    return null;
-  }
+export interface IndexedPageSummary {
+  url: string;
+  isIndexed: boolean;
+  coverageState: string | null;
+  issue: string | null;
+}
 
-  async listSites(_userId: string): Promise<SiteSummary[]> {
-    void _userId;
-    return [];
+export class GoogleSearchConsoleService {
+  constructor(private readonly auth: OAuth2Client) {}
+
+  async listSites(): Promise<SiteSummary[]> {
+    const webmasters = google.webmasters({ version: "v3", auth: this.auth });
+    const { data } = await webmasters.sites.list();
+    return (
+      data.siteEntry?.map((s) => ({
+        siteUrl: s.siteUrl ?? "",
+        permissionLevel: s.permissionLevel ?? "",
+      })) ?? []
+    ).filter((s) => s.siteUrl);
   }
 
   async getSearchAnalytics(
-    _userId: string,
-    _siteUrl: string,
-    _options: {
+    siteUrl: string,
+    options: {
       startDate: string;
       endDate: string;
-      dimensions: ("query" | "page" | "country" | "device")[];
+      dimensions: ("query" | "page" | "country" | "device" | "date")[];
       rowLimit?: number;
     },
   ): Promise<SearchAnalyticsRow[]> {
-    void _userId;
+    const webmasters = google.webmasters({ version: "v3", auth: this.auth });
+    const { data } = await webmasters.searchanalytics.query({
+      siteUrl,
+      requestBody: {
+        startDate: options.startDate,
+        endDate: options.endDate,
+        dimensions: options.dimensions,
+        rowLimit: options.rowLimit ?? 1000,
+      },
+    });
+    return (
+      data.rows?.map((row) => ({
+        keys: row.keys ?? [],
+        clicks: row.clicks ?? 0,
+        impressions: row.impressions ?? 0,
+        ctr: row.ctr ?? 0,
+        position: row.position ?? 0,
+      })) ?? []
+    );
+  }
+
+  /** URL Inspection at scale is quota-heavy; return [] until a dedicated indexer job is added. */
+  async getIndexedPages(_siteUrl: string): Promise<IndexedPageSummary[]> {
     void _siteUrl;
-    void _options;
     return [];
   }
 }

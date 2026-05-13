@@ -5,3 +5,4 @@ export * from "@/lib/queues/sentiment-analysis.queue";
 export * from "@/lib/queues/recommendation.queue";
 export * from "@/lib/queues/citation-extraction.queue";
 export * from "@/lib/queues/trend-analysis.queue";
+export * from "@/lib/queues/website-crawl.queue";

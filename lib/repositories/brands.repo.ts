@@ -1,7 +1,7 @@
 import type { BrandRow } from "@/lib/supabase/types";
 import { BaseRepository, type PaginatedResult, type QueryOptions } from "@/lib/repositories/base.repo";
 import { DatabaseError } from "@/lib/repositories/errors";
-import { DEMO_BRAND } from "@/lib/demo/seed-data";
+import { DEMO_BRAND, DEMO_BRAND_ID } from "@/lib/demo/seed-data";
 
 export interface BrandEntity {
   id: string;
@@ -41,7 +41,7 @@ export class BrandsRepository extends BaseRepository<
   async findById(id: string): Promise<BrandEntity | null> {
     if (this.isDemoMode()) {
       return {
-        id: "demo-brand",
+        id: DEMO_BRAND_ID,
         name: DEMO_BRAND.name,
         website: "https://attio.com",
         category: DEMO_BRAND.category,
@@ -62,7 +62,7 @@ export class BrandsRepository extends BaseRepository<
       return {
         items: [
           {
-            id: "demo-brand",
+            id: DEMO_BRAND_ID,
             name: DEMO_BRAND.name,
             website: "https://attio.com",
             category: DEMO_BRAND.category,

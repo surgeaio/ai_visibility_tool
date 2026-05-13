@@ -1,10 +1,11 @@
-import { DEMO_PROMPTS } from "@/lib/demo/seed-data";
+import { DEMO_BRAND_ID, DEMO_PROMPTS } from "@/lib/demo/seed-data";
 import type { PromptRow } from "@/lib/supabase/types";
 import { BaseRepository, type PaginatedResult, type QueryOptions } from "@/lib/repositories/base.repo";
 import { DatabaseError } from "@/lib/repositories/errors";
 
 export interface PromptEntity {
   id: string;
+  brandId: string;
   text: string;
   category: string;
   visibility: boolean;
@@ -29,6 +30,7 @@ export interface PromptUpdateInput {
 function toPromptEntity(row: PromptRow): PromptEntity {
   return {
     id: row.id,
+    brandId: row.brand_id,
     text: row.text,
     category: row.category ?? "general",
     visibility: false,
@@ -61,6 +63,7 @@ export class PromptsRepository extends BaseRepository<
       return found
         ? {
             id: found.id,
+            brandId: DEMO_BRAND_ID,
             text: found.text,
             category: found.category,
             visibility: found.visibility,
@@ -100,6 +103,7 @@ export class PromptsRepository extends BaseRepository<
         )
         .map((item) => ({
           id: item.id,
+          brandId: DEMO_BRAND_ID,
           text: item.text,
           category: item.category,
           visibility: item.visibility,
@@ -134,6 +138,7 @@ export class PromptsRepository extends BaseRepository<
     if (this.isDemoMode()) {
       const created: PromptEntity = {
         id: crypto.randomUUID(),
+        brandId: input.brandId ?? DEMO_BRAND_ID,
         text: input.text,
         category: input.category,
         visibility: false,
@@ -190,6 +195,7 @@ export class PromptsRepository extends BaseRepository<
       DEMO_PROMPTS[index] = next;
       return {
         id: next.id,
+        brandId: DEMO_BRAND_ID,
         text: next.text,
         category: next.category,
         visibility: next.visibility,

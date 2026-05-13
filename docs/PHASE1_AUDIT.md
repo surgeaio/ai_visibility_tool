@@ -186,3 +186,14 @@ Browser → Next.js (RSC + client) → API routes → Repositories → [Demo see
 ## 10. Out of scope for “single PR”
 
 Phases 4–17 as written imply **multiple engineering weeks** (Redis infra, workers, Stripe, full GEO NLP). Treat this document as the contract for incremental delivery.
+
+---
+
+## 11. Update — integration pass (May 2026)
+
+- **Supabase types**: `lib/supabase/database.types.ts` now includes `Insert` / `Update` / `Relationships` for all public tables so service-role clients type-check on `.insert()` / `.update()`.
+- **Migrations**: `20260215000000_final_real_data.sql` adds optional recommendation detail columns (`implementation_steps`, `impact_score`, etc.).
+- **APIs**: `/api/analytics/{descriptive,diagnostic,predictive}`, `/api/gsc/sync`, `/api/gsc/status`, existing LLM/Google/recommendations/audit routes aligned with live + demo behavior.
+- **Dashboard**: LLM visibility, Google rankings, recommendations, website audit (+ non-indexed), analytics, and API keys (GSC block) load from APIs with loading/error/empty handling; demo mode unchanged.
+- **Build**: `tsconfig` `target` ES2020; `npm run typecheck` clean.
+

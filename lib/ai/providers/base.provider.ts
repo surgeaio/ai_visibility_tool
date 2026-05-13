@@ -7,5 +7,5 @@ export abstract class AIProvider {
 
   abstract execute(prompt: string, options: AIExecuteOptions): Promise<AIResponse>;
   abstract healthCheck(): Promise<boolean>;
-  abstract estimateCost(inputTokens: number, outputTokens: number): number;
+  abstract estimateCost(inputTokens: number, outputTokens: number, model?: string): number;
 }

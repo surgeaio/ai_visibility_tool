@@ -4,7 +4,8 @@ export type BullQueueName = (typeof BULL_QUEUE_NAMES)[number];
 
 export interface PromptExecutionJobData {
   promptId: string;
-  brandId?: string;
+  userId: string;
+  brandId: string;
   requestId?: string;
 }
 
@@ -15,6 +16,8 @@ export interface SentimentAnalysisJobData {
 
 export interface RecommendationJobData {
   brandId: string;
+  userId: string;
+  brandName?: string;
   patternIds?: string[];
 }
 
@@ -26,4 +29,10 @@ export interface CitationExtractionJobData {
 export interface TrendAnalysisJobData {
   brandId: string;
   windowDays?: number;
+}
+
+export interface WebsiteCrawlJobData {
+  brandId: string;
+  siteUrl: string;
+  maxPages: number;
 }

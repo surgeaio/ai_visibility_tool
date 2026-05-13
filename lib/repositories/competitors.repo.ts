@@ -93,6 +93,9 @@ export class CompetitorsRepository extends BaseRepository<
       .range(offset, offset + limit - 1)
       .order("created_at", { ascending: sortOrder === "asc" });
     if (options.search) query = query.ilike("competitor_name", `%${options.search}%`);
+    if (options.filters?.brandId) {
+      query = query.eq("brand_id", String(options.filters.brandId));
+    }
     const { data, error, count } = await query;
     if (error) throw new DatabaseError(error.message);
     const rows = (data ?? []) as CompetitorRow[];

@@ -10,7 +10,7 @@ export class AnthropicProvider extends AIProvider {
   async execute(prompt: string, options: AIExecuteOptions): Promise<AIResponse> {
     const started = Date.now();
     const model = options.model ?? this.defaultModel;
-    const key = process.env.ANTHROPIC_API_KEY;
+    const key = options.apiKey?.trim() || process.env.ANTHROPIC_API_KEY;
 
     if (!key) {
       return {
@@ -43,7 +43,7 @@ export class AnthropicProvider extends AIProvider {
       rawResponse: textBlock && textBlock.type === "text" ? textBlock.text : "",
       citations: [],
       tokensUsed: { input: inputTokens, output: outputTokens },
-      cost: this.estimateCost(inputTokens, outputTokens),
+      cost: this.estimateCost(inputTokens, outputTokens, model),
       latency: Date.now() - started,
       timestamp: new Date(),
       requestId: options.requestId,
@@ -54,7 +54,8 @@ export class AnthropicProvider extends AIProvider {
     return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
   }
 
-  estimateCost(inputTokens: number, outputTokens: number): number {
+  estimateCost(inputTokens: number, outputTokens: number, _model?: string): number {
+    void _model;
     const inputCost = (inputTokens / 1_000_000) * 3;
     const outputCost = (outputTokens / 1_000_000) * 15;
     return Number((inputCost + outputCost).toFixed(6));

@@ -1,55 +1,130 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DEMO_RECOMMENDATIONS } from "@/lib/demo/seed-data";
+import { DEMO_BRAND_ID } from "@/lib/demo/seed-data";
+import type { RecommendationEntity } from "@/lib/repositories/recommendations.repo";
 import { useDashboardStore } from "@/store/dashboard";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner";
+
+type TabKey = "all" | "llm" | "google" | "website" | "competitor";
+
+function tabMatch(tab: TabKey, r: RecommendationEntity): boolean {
+  if (tab === "all") return true;
+  const p = r.pattern.toLowerCase();
+  const c = r.category;
+  if (tab === "llm") return p.includes("llm") || c === "geo";
+  if (tab === "google") return p.includes("google") || c === "authority";
+  if (tab === "website") return p.includes("website") || c === "technical";
+  if (tab === "competitor") return p.includes("competitor") || c === "positioning";
+  return true;
+}
 
 export default function RecommendationsPage() {
   const completed = useDashboardStore((s) => s.recommendationCompleted);
   const toggle = useDashboardStore((s) => s.toggleRecommendationDone);
   const [priority, setPriority] = useState<string>("all");
   const [status, setStatus] = useState<string>("all");
+  const [tab, setTab] = useState<TabKey>("all");
+  const [items, setItems] = useState<RecommendationEntity[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const params = new URLSearchParams({
+        brandId: DEMO_BRAND_ID,
+        limit: "50",
+        offset: "0",
+      });
+      const res = await fetch(`/api/recommendations?${params.toString()}`, { cache: "no-store" });
+      const json = (await res.json()) as {
+        recommendations?: RecommendationEntity[];
+        total?: number;
+        error?: string;
+      };
+      if (!res.ok) throw new Error(json.error ?? "Failed to load");
+      setItems(json.recommendations ?? []);
+      setTotal(json.total ?? 0);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const filtered = useMemo(() => {
-    return DEMO_RECOMMENDATIONS.filter((r) => {
+    return items.filter((r) => {
       if (priority !== "all" && r.priority !== priority) return false;
-      const done = !!completed[r.id] || r.status === "done";
+      const done = !!completed[r.id] || r.status === "completed";
       if (status === "pending" && done) return false;
       if (status === "done" && !done) return false;
+      if (!tabMatch(tab, r)) return false;
       return true;
     });
-  }, [priority, status, completed]);
+  }, [items, priority, status, tab, completed]);
 
-  const total = DEMO_RECOMMENDATIONS.length;
-  const doneCount = DEMO_RECOMMENDATIONS.filter(
-    (r) => !!completed[r.id] || r.status === "done",
-  ).length;
+  const doneCount = items.filter((r) => !!completed[r.id] || r.status === "completed").length;
+
+  async function handleGenerate() {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/recommendations/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: DEMO_BRAND_ID }),
+      });
+      const json = (await res.json()) as { jobId?: string; status?: string; note?: string; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Generate failed");
+      if (json.status === "queued" && json.jobId) {
+        toast.success("Recommendations queued. Refresh in a few seconds.");
+      } else {
+        toast.message(json.note ?? "Check Redis for background workers.");
+      }
+      await load();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Generate failed");
+    } finally {
+      setGenerating(false);
+    }
+  }
 
   return (
     <div className="space-y-8">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold text-white">Recommendations</h2>
-          <p className="text-sm text-neutral-500">Prioritized plays generated from detected patterns.</p>
+          <p className="text-sm text-neutral-500">Prioritized plays from your data and AI drafts.</p>
           <p className="mt-2 text-sm text-neutral-400">
             Progress: <span className="font-mono text-white">{doneCount}</span> of{" "}
             <span className="font-mono text-white">{total}</span> completed
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" disabled={generating} onClick={() => void handleGenerate()}>
+            {generating ? "Queueing…" : "Generate recommendations"}
+          </Button>
           <Select value={priority} onValueChange={setPriority}>
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="Priority" />
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All priority</SelectItem>
+              <SelectItem value="critical">Critical</SelectItem>
               <SelectItem value="high">High</SelectItem>
               <SelectItem value="medium">Medium</SelectItem>
+              <SelectItem value="low">Low</SelectItem>
             </SelectContent>
           </Select>
           <Select value={status} onValueChange={setStatus}>
@@ -65,29 +140,56 @@ export default function RecommendationsPage() {
         </div>
       </div>
 
-      <Tabs defaultValue="patterns">
-        <TabsList>
-          <TabsTrigger value="patterns">Pattern type</TabsTrigger>
-          <TabsTrigger value="content">Content tasks</TabsTrigger>
-        </TabsList>
-        <TabsContent value="patterns" className="mt-6 space-y-4">
-          {filtered.map((r) => (
-            <RecommendationCard
-              key={r.id}
-              title={r.title}
-              pattern={r.pattern}
-              priority={r.priority}
-              actions={r.actions}
-              impact={r.impact}
-              done={!!completed[r.id] || r.status === "done"}
-              onToggle={() => toggle(r.id)}
-            />
-          ))}
-        </TabsContent>
-        <TabsContent value="content" className="mt-6 text-sm text-neutral-500">
-          Group content tasks by owner and sync to your CMS—wire-up placeholder for production workflows.
-        </TabsContent>
-      </Tabs>
+      {loading ? (
+        <p className="text-sm text-neutral-500">Loading…</p>
+      ) : error ? (
+        <p className="text-sm text-red-400">{error}</p>
+      ) : null}
+
+      <div className="flex flex-wrap gap-2">
+        {(
+          [
+            ["all", "All"],
+            ["llm", "LLM"],
+            ["google", "Google"],
+            ["website", "Website"],
+            ["competitor", "Competitor"],
+          ] as const
+        ).map(([value, label]) => (
+          <Button
+            key={value}
+            type="button"
+            size="sm"
+            variant={tab === value ? "secondary" : "ghost"}
+            onClick={() => setTab(value as TabKey)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
+      <div className="mt-6 space-y-4">
+          {!loading && !filtered.length ? (
+            <Card className="border-[#262626] bg-[#111]">
+              <CardContent className="p-6 text-sm text-neutral-400">
+                No recommendations in this tab yet. Try another tab or generate new ones.
+              </CardContent>
+            </Card>
+          ) : (
+            filtered.map((r) => (
+              <RecommendationCard
+                key={r.id}
+                title={r.title}
+                pattern={r.pattern}
+                priority={r.priority}
+                actions={r.actions}
+                impact={r.impact}
+                done={!!completed[r.id] || r.status === "completed"}
+                onToggle={() => toggle(r.id)}
+              />
+            ))
+          )}
+      </div>
     </div>
   );
 }
@@ -115,31 +217,20 @@ function RecommendationCard({
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <span className="text-xs font-semibold uppercase tracking-wide text-red-400">
-              [{priority.toUpperCase()} IMPACT]
+              [{priority.toUpperCase()}]
             </span>
-            <p className="mt-1 text-xs text-neutral-500">Pattern: {pattern.replace(/_/g, " ")}</p>
-            <p className="mt-4 text-base font-medium text-white">📌 {title}</p>
-            <div className="mt-4 space-y-2">
-              <p className="text-xs font-medium uppercase text-neutral-500">Recommended actions</p>
-              <ul className="space-y-2 text-sm text-neutral-300">
-                {actions.map((a) => (
-                  <li key={a} className="flex gap-2">
-                    <span className="text-emerald-400">✦</span>
-                    <span>{a}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <p className="mt-4 text-sm text-neutral-400">
-              Expected impact: <span className="font-mono text-white">{impact}</span>
-            </p>
+            <p className="mt-1 text-xs text-neutral-500">Source: {pattern.replace(/_/g, " ")}</p>
+            <h3 className="mt-2 text-base font-medium text-white">{title}</h3>
+            <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-neutral-300">
+              {actions.map((a) => (
+                <li key={a}>{a}</li>
+              ))}
+            </ul>
+            <p className="mt-3 text-xs text-emerald-400">{impact}</p>
           </div>
-          <div className="flex shrink-0 gap-2">
-            <Button variant="secondary" size="sm" onClick={onToggle}>
-              {done ? "Mark pending" : "Mark as done"}
-            </Button>
-            <Button size="sm">Start task</Button>
-          </div>
+          <Button size="sm" variant={done ? "ghost" : "secondary"} type="button" onClick={onToggle}>
+            {done ? "Mark pending" : "Mark done"}
+          </Button>
         </div>
       </CardContent>
     </Card>

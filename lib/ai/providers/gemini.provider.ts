@@ -10,7 +10,7 @@ export class GeminiProvider extends AIProvider {
   async execute(prompt: string, options: AIExecuteOptions): Promise<AIResponse> {
     const started = Date.now();
     const model = options.model ?? this.defaultModel;
-    const key = process.env.GOOGLE_AI_API_KEY;
+    const key = options.apiKey?.trim() || process.env.GOOGLE_AI_API_KEY;
     if (!key) {
       return {
         provider: this.name,
@@ -46,7 +46,7 @@ export class GeminiProvider extends AIProvider {
       rawResponse: raw,
       citations: [],
       tokensUsed: { input: inputTokens, output: outputTokens },
-      cost: this.estimateCost(inputTokens, outputTokens),
+      cost: this.estimateCost(inputTokens, outputTokens, model),
       latency: Date.now() - started,
       timestamp: new Date(),
       requestId: options.requestId,
@@ -57,9 +57,10 @@ export class GeminiProvider extends AIProvider {
     return Boolean(process.env.GOOGLE_AI_API_KEY?.trim());
   }
 
-  estimateCost(inputTokens: number, outputTokens: number): number {
-    const inputCost = (inputTokens / 1_000_000) * 0.35;
-    const outputCost = (outputTokens / 1_000_000) * 1.05;
+  estimateCost(inputTokens: number, outputTokens: number, _model?: string): number {
+    void _model;
+    const inputCost = (inputTokens / 1_000_000) * 0.075;
+    const outputCost = (outputTokens / 1_000_000) * 0.3;
     return Number((inputCost + outputCost).toFixed(6));
   }
 }

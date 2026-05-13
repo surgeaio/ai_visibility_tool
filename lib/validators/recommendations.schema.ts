@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { paginationSchema, sortOrderSchema, uuidSchema } from "@/lib/validators/common.schema";
+import { paginationSchema, sortOrderSchema } from "@/lib/validators/common.schema";
 
 export const recommendationPrioritySchema = z.enum(["critical", "high", "medium", "low"]);
 export const recommendationCategorySchema = z.enum([
@@ -17,7 +17,7 @@ export const recommendationStatusSchema = z.enum([
 ]);
 
 export const listRecommendationsQuerySchema = paginationSchema.extend({
-  brandId: uuidSchema.optional(),
+  brandId: z.string().min(1).max(80).optional(),
   priority: recommendationPrioritySchema.optional(),
   category: recommendationCategorySchema.optional(),
   status: recommendationStatusSchema.optional(),

@@ -54,16 +54,32 @@ function mapDemoPriority(value: "high" | "medium" | "low"): RecommendationEntity
 }
 
 function toRecommendationEntity(row: RecommendationRow): RecommendationEntity {
+  const desc = row.description?.trim();
+  const title = row.action ?? "Recommendation";
+  const pattern = row.pattern_type ?? row.category ?? "unknown";
   return {
     id: row.id,
-    pattern: row.pattern_type ?? "unknown",
-    title: row.action ?? "Recommendation",
-    actions: row.action ? [row.action] : [],
-    impact: "+0",
+    pattern,
+    title,
+    actions: desc && desc !== title ? [title, desc] : desc ? [desc] : title ? [title] : [],
+    impact: row.impact_score != null ? `Impact score ${row.impact_score}` : "+0",
     priority: mapPriority(row.priority),
     status: mapStatus(row.status),
-    category: "content",
+    category: mapEntityCategory(row.category, row.pattern_type),
   };
+}
+
+function mapEntityCategory(
+  cat: string | null,
+  pattern: string | null,
+): RecommendationEntity["category"] {
+  const p = (pattern ?? cat ?? "").toLowerCase();
+  if (p === "llm" || p === "geo") return "geo";
+  if (p === "google" || p === "authority") return "authority";
+  if (p === "website" || p === "technical") return "technical";
+  if (p === "competitor" || p === "positioning") return "positioning";
+  if (p === "content") return "content";
+  return "content";
 }
 
 export class RecommendationsRepository extends BaseRepository<
@@ -155,6 +171,9 @@ export class RecommendationsRepository extends BaseRepository<
       .order(sortBy === "priority" ? "priority" : "created_at", {
         ascending: sortOrder === "asc",
       });
+    if (options.filters?.brandId) {
+      query = query.eq("brand_id", String(options.filters.brandId));
+    }
     if (options.search) query = query.ilike("action", `%${options.search}%`);
     if (options.filters?.status) query = query.eq("status", String(options.filters.status));
     if (options.filters?.priority) {

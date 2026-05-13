@@ -1,10 +1,13 @@
 import { serverErrorResponse } from "@/lib/api/errors";
+import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateParams } from "@/lib/api/validate";
 import { promptIdParamSchema } from "@/lib/validators";
 import { getPromptExecutionQueue } from "@/lib/queues";
 import { PromptsRepository } from "@/lib/repositories";
+import { UserApiKeysRepository } from "@/lib/repositories/user-api-keys.repo";
 
 const promptsRepo = new PromptsRepository();
+const userApiKeysRepo = new UserApiKeysRepository();
 
 export async function POST(req: Request, { params }: { params: { id: string } }) {
   const requestId = getRequestId(req);
@@ -14,6 +17,24 @@ export async function POST(req: Request, { params }: { params: { id: string } })
   const promptId = paramValidation.data.id;
 
   try {
+    const userId = await getAuthedUserId();
+    if (!userId) {
+      return Response.json({ error: "Unauthorized", requestId }, { status: 401 });
+    }
+
+    const hasKeys = await userApiKeysRepo.hasAnyActiveLlmKey(userId);
+    if (!hasKeys) {
+      return Response.json(
+        {
+          error: "No API keys configured. Add at least one LLM provider key.",
+          action: "add_api_key",
+          url: "/dashboard/settings/api-keys",
+          requestId,
+        },
+        { status: 400 },
+      );
+    }
+
     const prompt = await promptsRepo.findById(promptId);
     if (!prompt) {
       return Response.json({ error: "Prompt not found", requestId }, { status: 404 });
@@ -23,7 +44,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     if (queue) {
       const job = await queue.add(
         "run",
-        { promptId, requestId },
+        { promptId, userId, brandId: prompt.brandId, requestId },
         {
           attempts: 3,
           backoff: { type: "exponential", delay: 1000 },
