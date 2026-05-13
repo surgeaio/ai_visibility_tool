@@ -1,12 +1,19 @@
 "use client";
 
+import Link from "next/link";
+import type { LucideIcon } from "lucide-react";
 import { motion } from "framer-motion";
 import {
+  ArrowRight,
+  Bot,
   Eye,
+  FileSearch,
   Heart,
   LayoutDashboard,
+  Lightbulb,
   LineChart as LineChartIcon,
   MessageSquare,
+  Search,
   TrendingDown,
   TrendingUp,
   Minus,
@@ -28,8 +35,11 @@ import { VisibilityChart } from "@/components/dashboard/VisibilityChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   DEMO_ACTIVITY,
+  DEMO_GOOGLE_SUMMARY,
+  DEMO_LLM_PLATFORM_SCORES,
   DEMO_MODEL_COVERAGE,
   DEMO_POSITION_RANKING,
+  DEMO_RECOMMENDATIONS,
   DEMO_SENTIMENT_DIST,
 } from "@/lib/demo/seed-data";
 import { cn } from "@/lib/utils";
@@ -44,6 +54,12 @@ const KPI_ICONS = {
 
 export default function OverviewPage() {
   const m = useBrandMetrics();
+
+  const llmAvg = Math.round(
+    DEMO_LLM_PLATFORM_SCORES.reduce((a, p) => a + p.score, 0) / DEMO_LLM_PLATFORM_SCORES.length,
+  );
+  const pendingRecs = DEMO_RECOMMENDATIONS.filter((r) => r.status === "pending");
+  const urgentRecs = pendingRecs.filter((r) => r.priority === "high").length;
 
   const kpis = [
     {
@@ -107,6 +123,37 @@ export default function OverviewPage() {
             </Card>
           </motion.div>
         ))}
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <QuickLinkCard
+          title="LLM visibility"
+          value={`${llmAvg}/100`}
+          sub="Average across ChatGPT, Claude, Gemini, Perplexity"
+          href="/dashboard/llm-visibility"
+          icon={Bot}
+        />
+        <QuickLinkCard
+          title="Google avg position"
+          value={String(DEMO_GOOGLE_SUMMARY.avgPosition)}
+          sub="Lower is better (demo Search Console)"
+          href="/dashboard/google-rankings"
+          icon={Search}
+        />
+        <QuickLinkCard
+          title="Open tasks"
+          value={String(pendingRecs.length)}
+          sub={`${urgentRecs} high priority`}
+          href="/dashboard/recommendations"
+          icon={Lightbulb}
+        />
+        <QuickLinkCard
+          title="Website audit"
+          value="Run checklist"
+          sub="Indexing, meta tags, thin content"
+          href="/dashboard/website-audit"
+          icon={FileSearch}
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
@@ -229,4 +276,36 @@ function Trend({ trend }: { trend: "up" | "down" | "neutral" }) {
   if (trend === "up") return <TrendingUp className="h-4 w-4 text-emerald-400" />;
   if (trend === "down") return <TrendingDown className="h-4 w-4 text-red-400" />;
   return <Minus className="h-4 w-4 text-neutral-500" />;
+}
+
+function QuickLinkCard({
+  title,
+  value,
+  sub,
+  href,
+  icon: Icon,
+}: {
+  title: string;
+  value: string;
+  sub: string;
+  href: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <Link href={href} className="group block">
+      <Card className="h-full border-[#262626] bg-[#111] transition-colors duration-200 hover:border-neutral-500">
+        <CardHeader className="flex flex-row items-start justify-between space-y-0 pb-2">
+          <CardTitle className="text-sm font-medium text-neutral-400">{title}</CardTitle>
+          <Icon className="h-4 w-4 text-neutral-500 group-hover:text-white" />
+        </CardHeader>
+        <CardContent>
+          <p className="font-mono text-2xl font-semibold text-white">{value}</p>
+          <p className="mt-2 line-clamp-2 text-xs text-neutral-500">{sub}</p>
+          <p className="mt-3 flex items-center gap-1 text-xs font-medium text-neutral-400 group-hover:text-white">
+            Open <ArrowRight className="h-3 w-3" />
+          </p>
+        </CardContent>
+      </Card>
+    </Link>
+  );
 }

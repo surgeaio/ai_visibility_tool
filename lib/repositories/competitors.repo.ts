@@ -39,10 +39,10 @@ export class CompetitorsRepository extends BaseRepository<
 > {
   async findById(id: string): Promise<CompetitorEntity | null> {
     if (this.isDemoMode()) {
-      const found = DEMO_COMPETITORS.find((item) => item.name === id);
+      const found = DEMO_COMPETITORS.find((item) => item.id === id || item.name === id);
       return found
         ? {
-            id: found.name,
+            id: found.id,
             name: found.name,
             visibility: found.visibility,
             sentiment: found.sentiment,
@@ -73,7 +73,7 @@ export class CompetitorsRepository extends BaseRepository<
           options.search ? item.name.toLowerCase().includes(options.search.toLowerCase()) : true,
         )
         .map((item) => ({
-          id: item.name,
+          id: item.id,
           name: item.name,
           visibility: item.visibility,
           sentiment: item.sentiment,
@@ -110,6 +110,7 @@ export class CompetitorsRepository extends BaseRepository<
         trend: "neutral",
       };
       DEMO_COMPETITORS.push({
+        id: created.id,
         name: created.name,
         visibility: created.visibility,
         sentiment: created.sentiment,
@@ -142,7 +143,7 @@ export class CompetitorsRepository extends BaseRepository<
 
   async update(id: string, input: CompetitorUpdateInput): Promise<CompetitorEntity> {
     if (this.isDemoMode()) {
-      const index = DEMO_COMPETITORS.findIndex((item) => item.name === id);
+      const index = DEMO_COMPETITORS.findIndex((item) => item.id === id || item.name === id);
       if (index === -1) throw new DatabaseError("Competitor not found");
       const updated = {
         ...DEMO_COMPETITORS[index],
@@ -150,7 +151,7 @@ export class CompetitorsRepository extends BaseRepository<
       };
       DEMO_COMPETITORS[index] = updated;
       return {
-        id: updated.name,
+        id: updated.id,
         name: updated.name,
         visibility: updated.visibility,
         sentiment: updated.sentiment,
@@ -171,7 +172,7 @@ export class CompetitorsRepository extends BaseRepository<
 
   async delete(id: string): Promise<boolean> {
     if (this.isDemoMode()) {
-      const index = DEMO_COMPETITORS.findIndex((item) => item.name === id);
+      const index = DEMO_COMPETITORS.findIndex((item) => item.id === id || item.name === id);
       if (index === -1) return false;
       DEMO_COMPETITORS.splice(index, 1);
       return true;

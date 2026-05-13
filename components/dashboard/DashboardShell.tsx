@@ -5,16 +5,23 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Activity,
+  BarChart3,
   BookOpen,
+  Bot,
+  CreditCard,
+  FileSearch,
   Heart,
+  KeyRound,
   LayoutDashboard,
   Lightbulb,
   Link as LinkIcon,
   Menu,
   MessageSquare,
+  Search,
   Settings,
   Users,
 } from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useState } from "react";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -39,25 +46,84 @@ const TITLE_MAP: Record<string, string> = {
   "/dashboard/citations": "Citations",
   "/dashboard/recommendations": "Recommendations",
   "/dashboard/jobs": "Jobs",
-  "/dashboard/settings": "Settings",
+  "/dashboard/settings": "Profile & workspace",
+  "/dashboard/settings/api-keys": "API Keys",
+  "/dashboard/settings/billing": "Billing",
+  "/dashboard/llm-visibility": "LLM Visibility",
+  "/dashboard/google-rankings": "Google Rankings",
+  "/dashboard/analytics": "Analytics",
+  "/dashboard/website-audit": "Website Audit",
+  "/dashboard/website-audit/non-indexed": "Non-indexed pages",
 };
 
-const NAV = [
-  { href: "/dashboard", label: "Overview", icon: LayoutDashboard },
-  { href: "/dashboard/prompts", label: "Prompts", icon: MessageSquare },
-  { href: "/dashboard/jobs", label: "Jobs", icon: Activity },
-  { href: "/dashboard/competitors", label: "Competitors", icon: Users },
-  { href: "/dashboard/sentiment", label: "Sentiment", icon: Heart },
-  { href: "/dashboard/sources", label: "Sources", icon: LinkIcon },
-  { href: "/dashboard/citations", label: "Citations", icon: BookOpen },
+function resolvePageTitle(pathname: string): string {
+  if (pathname.startsWith("/dashboard/settings/api-keys")) return "API Keys";
+  if (pathname.startsWith("/dashboard/settings/billing")) return "Billing";
+  if (pathname.startsWith("/dashboard/llm-visibility/")) return "LLM prompt detail";
+  if (pathname.startsWith("/dashboard/llm-visibility")) return "LLM Visibility";
+  if (pathname.startsWith("/dashboard/google-rankings/")) return "Keyword detail";
+  if (pathname.startsWith("/dashboard/google-rankings")) return "Google Rankings";
+  if (pathname.startsWith("/dashboard/competitors/")) return "Competitor detail";
+  if (pathname.startsWith("/dashboard/website-audit/non-indexed")) return "Non-indexed pages";
+  if (pathname.startsWith("/dashboard/website-audit")) return "Website Audit";
+  return TITLE_MAP[pathname] ?? "Dashboard";
+}
+
+type NavItem = { href: string; label: string; icon: LucideIcon; badge?: number; match?: "exact" | "prefix" };
+
+type NavSection = { label: string; items: NavItem[] };
+
+const NAV_SECTIONS: NavSection[] = [
   {
-    href: "/dashboard/recommendations",
-    label: "Recommendations",
-    icon: Lightbulb,
-    badge: DEMO_RECOMMENDATIONS.filter((r) => r.status === "pending").length,
+    label: "Home",
+    items: [{ href: "/dashboard", label: "Overview", icon: LayoutDashboard, match: "exact" }],
   },
-  { href: "/dashboard/settings", label: "Settings", icon: Settings },
+  {
+    label: "Analytics",
+    items: [
+      { href: "/dashboard/llm-visibility", label: "LLM Visibility", icon: Bot, match: "prefix" },
+      { href: "/dashboard/google-rankings", label: "Google Rankings", icon: Search, match: "prefix" },
+      { href: "/dashboard/competitors", label: "Competitors", icon: Users, match: "prefix" },
+      { href: "/dashboard/analytics", label: "3-layer analytics", icon: BarChart3, match: "prefix" },
+    ],
+  },
+  {
+    label: "Tools",
+    items: [
+      { href: "/dashboard/prompts", label: "Prompts", icon: MessageSquare, match: "prefix" },
+      { href: "/dashboard/website-audit", label: "Website audit", icon: FileSearch, match: "prefix" },
+      {
+        href: "/dashboard/recommendations",
+        label: "Recommendations",
+        icon: Lightbulb,
+        match: "prefix",
+        badge: DEMO_RECOMMENDATIONS.filter((r) => r.status === "pending").length,
+      },
+      { href: "/dashboard/jobs", label: "Jobs", icon: Activity, match: "prefix" },
+    ],
+  },
+  {
+    label: "More",
+    items: [
+      { href: "/dashboard/sentiment", label: "Sentiment", icon: Heart, match: "prefix" },
+      { href: "/dashboard/sources", label: "Sources", icon: LinkIcon, match: "prefix" },
+      { href: "/dashboard/citations", label: "Citations", icon: BookOpen, match: "prefix" },
+    ],
+  },
+  {
+    label: "Settings",
+    items: [
+      { href: "/dashboard/settings", label: "Profile", icon: Settings, match: "exact" },
+      { href: "/dashboard/settings/api-keys", label: "API keys", icon: KeyRound, match: "prefix" },
+      { href: "/dashboard/settings/billing", label: "Billing", icon: CreditCard, match: "prefix" },
+    ],
+  },
 ];
+
+function isNavActive(pathname: string, item: NavItem): boolean {
+  if (item.match === "exact") return pathname === item.href;
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
+}
 
 function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname();
@@ -80,30 +146,37 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      <nav className="flex-1 space-y-1 p-3">
-        {NAV.map((item) => {
-          const active = pathname === item.href;
-          const Icon = item.icon;
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={onNavigate}
-              className={cn(
-                "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200",
-                active ? "bg-[#1a1a1a] text-white" : "text-neutral-400 hover:bg-[#1a1a1a] hover:text-white",
-              )}
-            >
-              <Icon className="h-4 w-4 shrink-0" />
-              <span className="flex-1 truncate">{item.label}</span>
-              {item.badge != null && (
-                <Badge variant="secondary" className="font-mono text-xxs">
-                  {item.badge}
-                </Badge>
-              )}
-            </Link>
-          );
-        })}
+      <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+        {NAV_SECTIONS.map((section) => (
+          <div key={section.label}>
+            <p className="mb-1 px-3 text-xxs font-semibold uppercase tracking-wide text-neutral-600">{section.label}</p>
+            <div className="space-y-0.5">
+              {section.items.map((item) => {
+                const active = isNavActive(pathname, item);
+                const Icon = item.icon;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    onClick={onNavigate}
+                    className={cn(
+                      "flex items-center gap-3 rounded-lg px-3 py-2 text-sm transition-colors duration-200",
+                      active ? "bg-[#1a1a1a] text-white" : "text-neutral-400 hover:bg-[#1a1a1a] hover:text-white",
+                    )}
+                  >
+                    <Icon className="h-4 w-4 shrink-0" />
+                    <span className="flex-1 truncate">{item.label}</span>
+                    {item.badge != null && (
+                      <Badge variant="secondary" className="font-mono text-xxs">
+                        {item.badge}
+                      </Badge>
+                    )}
+                  </Link>
+                );
+              })}
+            </div>
+          </div>
+        ))}
       </nav>
       <div className="border-t border-[#262626] p-4">
         <div className="flex items-center gap-3">
@@ -124,7 +197,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
 
 export function DashboardShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
-  const title = TITLE_MAP[pathname] ?? "Dashboard";
+  const title = resolvePageTitle(pathname);
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
