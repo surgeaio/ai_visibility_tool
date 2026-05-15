@@ -14,6 +14,8 @@ import { DEMO_CHART_DATA } from "@/lib/demo/seed-data";
 
 const COLORS: Record<string, string> = {
   attio: "#ffffff",
+  easyderma: "#38bdf8",
+  kurahomes: "#a78bfa",
   hubspot: "#737373",
   salesforce: "#525252",
 };

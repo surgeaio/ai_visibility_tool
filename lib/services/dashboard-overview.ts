@@ -3,8 +3,9 @@ import type { Database } from "@/lib/supabase/database.types";
 import {
   DEMO_ACTIVITY,
   DEMO_BRAND,
+  DEMO_BRAND_ID,
   DEMO_CHART_DATA,
-  DEMO_GOOGLE_SUMMARY,
+  resolveDemoBrandProfile,
   DEMO_LLM_PLATFORM_SCORES,
   DEMO_MODEL_COVERAGE,
   DEMO_POSITION_RANKING,
@@ -22,6 +23,8 @@ function rangeToMs(range: DashboardRange): number {
 export interface DashboardOverviewPayload {
   source: "live" | "demo";
   brandName: string;
+  brandId?: string;
+  chartBrandKey?: string;
   kpis: {
     visibility: number;
     sentiment: number;
@@ -249,49 +252,55 @@ export async function getLiveDashboardOverview(
   };
 }
 
-export function buildDemoDashboardOverview(brandName: string): DashboardOverviewPayload {
+export function buildDemoDashboardOverview(brandName: string, brandId?: string): DashboardOverviewPayload {
+  const profile = resolveDemoBrandProfile(brandId ?? DEMO_BRAND_ID, brandName);
   const pendingRecs = DEMO_RECOMMENDATIONS.filter((r) => r.status === "pending");
-  const llmOverall = Math.round(
+  const baseLlmOverall = Math.round(
     DEMO_LLM_PLATFORM_SCORES.reduce((a, p) => a + p.score, 0) / DEMO_LLM_PLATFORM_SCORES.length,
   );
+  const llmOverall = Math.max(0, Math.min(100, baseLlmOverall + profile.llmOverallOffset));
+  const chartKey = profile.chartKey;
   const visibilityTrend = DEMO_CHART_DATA.visibility.map((row) => ({
     label: row.month,
-    score: row.attio,
+    score: Number(row[chartKey as keyof typeof row] ?? row.attio),
   }));
+  const activityForBrand = DEMO_ACTIVITY.filter(
+    (a) => a.brand.toLowerCase() === profile.activityBrandFilter.toLowerCase(),
+  );
+  const activity =
+    activityForBrand.length > 0
+      ? activityForBrand
+      : DEMO_ACTIVITY.map((a) => ({ ...a, brand: brandName || DEMO_BRAND.name }));
+
   return {
     source: "demo",
     brandName: brandName || DEMO_BRAND.name,
-    kpis: {
-      visibility: DEMO_BRAND.metrics.visibility,
-      sentiment: DEMO_BRAND.metrics.sentiment,
-      position: DEMO_BRAND.metrics.position,
-      promptsTracked: DEMO_BRAND.metrics.promptsTracked,
-    },
-    googleSummary: {
-      avgPosition: DEMO_GOOGLE_SUMMARY.avgPosition,
-      clicks: DEMO_GOOGLE_SUMMARY.clicks,
-      impressions: DEMO_GOOGLE_SUMMARY.impressions,
-      ctr: DEMO_GOOGLE_SUMMARY.ctr,
-    },
+    brandId: brandId ?? DEMO_BRAND_ID,
+    chartBrandKey: chartKey,
+    kpis: { ...profile.metrics },
+    googleSummary: { ...profile.googleSummary },
     llmOverall,
     llmPlatformScores: DEMO_LLM_PLATFORM_SCORES.map((p) => ({
       platform: p.platform,
-      score: p.score,
+      score: Math.max(0, Math.min(100, p.score + profile.modelCoverageOffset)),
       sentiment: p.sentiment,
     })),
     sentimentDist: {
-      positive: DEMO_SENTIMENT_DIST.positive,
+      positive: Math.max(0, DEMO_SENTIMENT_DIST.positive + profile.modelCoverageOffset),
       neutral: DEMO_SENTIMENT_DIST.neutral,
-      negative: DEMO_SENTIMENT_DIST.negative,
+      negative: Math.max(0, DEMO_SENTIMENT_DIST.negative - profile.modelCoverageOffset),
     },
     visibilityTrend,
-    modelCoverage: DEMO_MODEL_COVERAGE.map((m) => ({ model: m.model, visibility: m.visibility })),
+    modelCoverage: DEMO_MODEL_COVERAGE.map((m) => ({
+      model: m.model,
+      visibility: Math.max(0, Math.min(100, m.visibility + profile.modelCoverageOffset)),
+    })),
     positionRanking: DEMO_POSITION_RANKING.map((r) => ({
       name: r.name,
       position: r.position,
-      highlight: r.highlight,
+      highlight: r.name === profile.positionHighlight,
     })),
-    activity: DEMO_ACTIVITY.map((a) => ({
+    activity: activity.map((a) => ({
       id: a.id,
       prompt: a.prompt,
       brand: a.brand,
