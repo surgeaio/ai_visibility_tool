@@ -253,7 +253,10 @@ export default function OverviewPage() {
           {overview.source === "live" ? (
             <VisibilityChart simpleTrend={overview.visibilityTrend} />
           ) : (
-            <VisibilityChart />
+            <VisibilityChart
+              brandKey={overview.chartBrandKey ?? "attio"}
+              competitorKeys={overview.chartBrandKey === "attio" ? ["hubspot", "salesforce"] : []}
+            />
           )}
         </Card>
 

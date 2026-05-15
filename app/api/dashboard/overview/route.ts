@@ -21,7 +21,7 @@ export async function GET(req: Request) {
     const brandsRepo = new BrandsRepository();
     const brand = await brandsRepo.findById(brandId);
     const name = brand?.name ?? "Demo brand";
-    return Response.json({ ...buildDemoDashboardOverview(name), requestId });
+    return Response.json({ ...buildDemoDashboardOverview(name, brandId), requestId });
   }
 
   try {

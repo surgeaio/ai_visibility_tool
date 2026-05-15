@@ -78,6 +78,13 @@ export function ClientSelector({ selectedBrandId, onSelect }: ClientSelectorProp
     void fetchClients();
   }, [fetchClients]);
 
+  useEffect(() => {
+    if (clients.length === 0) return;
+    const current = clients.find((c) => c.id === selectedBrandId) ?? null;
+    setSelected(current);
+    if (current) setBrandName(current.name);
+  }, [selectedBrandId, clients, setBrandName]);
+
   const handleSelect = (client: Client) => {
     setSelected(client);
     onSelect(client.id);

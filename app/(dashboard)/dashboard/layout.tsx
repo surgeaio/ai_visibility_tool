@@ -1,6 +1,5 @@
 import type { ReactNode } from "react";
 import { DashboardShell } from "@/components/dashboard/DashboardShell";
-import { DemoBanner } from "@/components/dashboard/DemoBanner";
 import { BrandProvider } from "@/lib/context/brand-context";
 import { isAuthBypassMode } from "@/lib/config";
 import { DEMO_BRAND_ID } from "@/lib/demo/seed-data";
@@ -34,7 +33,6 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   return (
     <BrandProvider defaultBrandId={defaultBrandId}>
       <DashboardShell>
-        <DemoBanner />
         {children}
       </DashboardShell>
     </BrandProvider>

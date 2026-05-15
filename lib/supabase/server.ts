@@ -27,5 +27,8 @@ async function createServerSupabaseClientUncached() {
   });
 }
 
-/** One Supabase server client per request (RSC / route handler). */
-export const createServerSupabaseClient = cache(createServerSupabaseClientUncached);
+/** One Supabase server client per request (RSC / route handler). Plain Node (tsx workers) has no `react.cache`. */
+export const createServerSupabaseClient =
+  typeof cache === "function"
+    ? cache(createServerSupabaseClientUncached)
+    : createServerSupabaseClientUncached;

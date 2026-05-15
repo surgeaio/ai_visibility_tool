@@ -114,14 +114,71 @@ export const DEMO_PATTERNS = [
 
 export const DEMO_CHART_DATA = {
   visibility: [
-    { month: "Jan", attio: 45, hubspot: 72, salesforce: 80 },
-    { month: "Feb", attio: 48, hubspot: 73, salesforce: 79 },
-    { month: "Mar", attio: 52, hubspot: 71, salesforce: 81 },
-    { month: "Apr", attio: 58, hubspot: 74, salesforce: 78 },
-    { month: "May", attio: 63, hubspot: 75, salesforce: 82 },
-    { month: "Jun", attio: 67, hubspot: 76, salesforce: 80 },
+    { month: "Jan", attio: 45, easyderma: 32, kurahomes: 38, hubspot: 72, salesforce: 80 },
+    { month: "Feb", attio: 48, easyderma: 35, kurahomes: 41, hubspot: 73, salesforce: 79 },
+    { month: "Mar", attio: 52, easyderma: 39, kurahomes: 44, hubspot: 71, salesforce: 81 },
+    { month: "Apr", attio: 58, easyderma: 42, kurahomes: 49, hubspot: 74, salesforce: 78 },
+    { month: "May", attio: 63, easyderma: 46, kurahomes: 53, hubspot: 75, salesforce: 82 },
+    { month: "Jun", attio: 67, easyderma: 48, kurahomes: 55, hubspot: 76, salesforce: 80 },
   ],
 };
+
+/** Per-client demo overview (sidebar brands). */
+export const DEMO_BRAND_OVERVIEW_PROFILES: Record<
+  string,
+  {
+    chartKey: "attio" | "easyderma" | "kurahomes";
+    metrics: { visibility: number; sentiment: number; position: number; promptsTracked: number };
+    googleSummary: { avgPosition: number; clicks: number; impressions: number; ctr: number };
+    llmOverallOffset: number;
+    modelCoverageOffset: number;
+    positionHighlight: string;
+    activityBrandFilter: string;
+  }
+> = {
+  "demo-brand-001": {
+    chartKey: "attio",
+    metrics: { visibility: 63, sentiment: 89, position: 2.4, promptsTracked: 142 },
+    googleSummary: { avgPosition: 4.2, clicks: 8420, impressions: 124000, ctr: 6.8 },
+    llmOverallOffset: 0,
+    modelCoverageOffset: 0,
+    positionHighlight: "Attio",
+    activityBrandFilter: "Attio",
+  },
+  "demo-brand-002": {
+    chartKey: "easyderma",
+    metrics: { visibility: 48, sentiment: 76, position: 3.8, promptsTracked: 67 },
+    googleSummary: { avgPosition: 8.1, clicks: 2100, impressions: 42000, ctr: 5.0 },
+    llmOverallOffset: -12,
+    modelCoverageOffset: -8,
+    positionHighlight: "Easyderma",
+    activityBrandFilter: "Easyderma",
+  },
+  "demo-brand-003": {
+    chartKey: "kurahomes",
+    metrics: { visibility: 55, sentiment: 81, position: 3.1, promptsTracked: 94 },
+    googleSummary: { avgPosition: 6.4, clicks: 3900, impressions: 68000, ctr: 5.7 },
+    llmOverallOffset: -6,
+    modelCoverageOffset: -4,
+    positionHighlight: "Kurahomes",
+    activityBrandFilter: "Kurahomes",
+  },
+};
+
+export function resolveDemoBrandProfile(brandId: string, brandName: string) {
+  return (
+    DEMO_BRAND_OVERVIEW_PROFILES[brandId] ??
+    DEMO_BRAND_OVERVIEW_PROFILES[DEMO_BRAND_ID] ?? {
+      chartKey: "attio" as const,
+      metrics: DEMO_BRAND.metrics,
+      googleSummary: { avgPosition: 4.2, clicks: 8420, impressions: 124000, ctr: 6.8 },
+      llmOverallOffset: 0,
+      modelCoverageOffset: 0,
+      positionHighlight: brandName,
+      activityBrandFilter: brandName,
+    }
+  );
+}
 
 export const DEMO_MODEL_COVERAGE = [
   { model: "ChatGPT", visibility: 68 },

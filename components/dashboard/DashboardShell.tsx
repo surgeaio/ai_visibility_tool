@@ -9,6 +9,7 @@ import {
   BookOpen,
   Bot,
   FileSearch,
+  ShieldCheck,
   Heart,
   LayoutDashboard,
   Lightbulb,
@@ -52,6 +53,7 @@ const TITLE_MAP: Record<string, string> = {
   "/dashboard/google-rankings": "Google Rankings",
   "/dashboard/analytics": "Analytics",
   "/dashboard/website-audit": "Website Audit",
+  "/dashboard/brand-audit": "Brand Audit",
   "/dashboard/website-audit/non-indexed": "Non-indexed pages",
 };
 
@@ -89,6 +91,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/dashboard/prompts", label: "Prompts", icon: MessageSquare, match: "prefix" },
       { href: "/dashboard/website-audit", label: "Website audit", icon: FileSearch, match: "prefix" },
+      { href: "/dashboard/brand-audit", label: "Brand Audit", icon: ShieldCheck, match: "prefix" },
       {
         href: "/dashboard/recommendations",
         label: "Recommendations",
