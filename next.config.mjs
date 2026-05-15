@@ -5,6 +5,8 @@ const nextConfig = {
   },
   eslint: {
     dirs: ["app/(dashboard)", "app/api", "app/auth", "app/login", "components", "lib", "store"],
+    // Lint runs in CI (`npm run verify`); skip during `next build` to reduce memory on Vercel/local.
+    ignoreDuringBuilds: true,
   },
   async headers() {
     return [
