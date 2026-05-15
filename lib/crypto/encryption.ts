@@ -3,19 +3,36 @@ import { createCipheriv, createDecipheriv, createHash, randomBytes } from "crypt
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
 
+function isProduction(): boolean {
+  return process.env.NODE_ENV === "production";
+}
+
 function resolveKeyMaterial(): Buffer {
   const raw = process.env.ENCRYPTION_KEY?.trim();
+  if (isProduction()) {
+    if (!raw || !/^[a-fA-F0-9]{64}$/i.test(raw)) {
+      throw new Error(
+        "ENCRYPTION_KEY must be a 64-character hex string in production (openssl rand -hex 32).",
+      );
+    }
+    return Buffer.from(raw, "hex");
+  }
   if (raw && /^[a-fA-F0-9]{64}$/i.test(raw)) {
     return Buffer.from(raw, "hex");
   }
   if (raw && raw.length >= 8) {
     return createHash("sha256").update(raw, "utf8").digest();
   }
-  return createHash("sha256").update("demo-only-encryption-key-do-not-use-in-prod", "utf8").digest();
+  throw new Error(
+    "Set ENCRYPTION_KEY in .env.local (64 hex recommended, or at least 8 characters in development).",
+  );
 }
 
 export function isEncryptionConfigured(): boolean {
   const raw = process.env.ENCRYPTION_KEY?.trim();
+  if (isProduction()) {
+    return Boolean(raw && /^[a-fA-F0-9]{64}$/i.test(raw));
+  }
   return Boolean(raw && (/^[a-fA-F0-9]{64}$/i.test(raw) || raw.length >= 8));
 }
 

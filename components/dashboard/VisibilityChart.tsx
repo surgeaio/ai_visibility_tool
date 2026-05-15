@@ -18,15 +18,49 @@ const COLORS: Record<string, string> = {
   salesforce: "#525252",
 };
 
+export type SimpleTrendPoint = { label: string; score: number };
+
 export function VisibilityChart({
   data = DEMO_CHART_DATA.visibility,
   brandKey = "attio",
   competitorKeys = ["hubspot", "salesforce"],
+  simpleTrend,
 }: {
   data?: typeof DEMO_CHART_DATA.visibility;
   brandKey?: string;
   competitorKeys?: string[];
+  /** When set, renders a single “visibility score” line from live overview data. */
+  simpleTrend?: SimpleTrendPoint[];
 }) {
+  if (simpleTrend?.length) {
+    return (
+      <div className="h-[280px] w-full">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={simpleTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
+            <CartesianGrid stroke="#262626" strokeDasharray="3 3" vertical={false} />
+            <XAxis dataKey="label" stroke="#737373" tick={{ fill: "#737373", fontSize: 12 }} />
+            <YAxis
+              stroke="#737373"
+              domain={[0, 100]}
+              tickFormatter={(v) => `${v}%`}
+              tick={{ fill: "#737373", fontSize: 12 }}
+            />
+            <Tooltip
+              contentStyle={{
+                backgroundColor: "#111111",
+                border: "1px solid #262626",
+                borderRadius: "8px",
+                color: "#fff",
+              }}
+              formatter={(value) => [`${value ?? 0}%`, "Visibility"]}
+            />
+            <Line type="monotone" dataKey="score" name="Visibility" stroke="#fff" strokeWidth={2} dot={false} />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    );
+  }
+
   return (
     <div className="h-[280px] w-full">
       <ResponsiveContainer width="100%" height="100%">

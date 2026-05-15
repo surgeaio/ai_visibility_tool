@@ -1,5 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    instrumentationHook: true,
+  },
   eslint: {
     dirs: ["app/(dashboard)", "app/api", "app/auth", "app/login", "components", "lib", "store"],
   },

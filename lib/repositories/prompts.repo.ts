@@ -101,6 +101,11 @@ export class PromptsRepository extends BaseRepository<
             ? item.category.toLowerCase() === String(options.filters.category).toLowerCase()
             : true,
         )
+        .filter(() =>
+          options.filters?.brandId
+            ? String(options.filters.brandId) === DEMO_BRAND_ID
+            : true,
+        )
         .map((item) => ({
           id: item.id,
           brandId: DEMO_BRAND_ID,
@@ -121,6 +126,12 @@ export class PromptsRepository extends BaseRepository<
       .range(offset, offset + limit - 1)
       .order(sortBy === "text" ? "text" : "created_at", { ascending: sortOrder === "asc" });
     if (options.search) query = query.ilike("text", `%${options.search}%`);
+    if (options.filters?.brandId) {
+      query = query.eq("brand_id", String(options.filters.brandId));
+    }
+    if (options.filters?.is_active !== undefined) {
+      query = query.eq("is_active", Boolean(options.filters.is_active));
+    }
     if (options.filters?.category) {
       query = query.eq("category", String(options.filters.category));
     }

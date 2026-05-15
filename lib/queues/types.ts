@@ -36,3 +36,13 @@ export interface WebsiteCrawlJobData {
   siteUrl: string;
   maxPages: number;
 }
+
+export interface SerperRankingJobData {
+  brandId: string;
+  userId: string;
+  keywords?: string[];
+  includeCompetitors?: boolean;
+  gl?: string;
+  hl?: string;
+  requestId?: string;
+}

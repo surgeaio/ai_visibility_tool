@@ -1,6 +1,7 @@
 import type IORedis from "ioredis";
 import { createBullMQConnection } from "@/lib/redis/client";
 import { registerCitationWorker } from "./citation.worker";
+import { registerSerperRankingWorker } from "./serper-ranking.worker";
 import { registerWebsiteCrawlWorker } from "./crawl.worker";
 import { registerPromptExecutionWorker } from "./prompt.worker";
 import { registerRecommendationWorker } from "./recommendation.worker";
@@ -40,6 +41,7 @@ async function main() {
     registerCitationWorker(await dup(base)),
     registerTrendWorker(await dup(base)),
     registerWebsiteCrawlWorker(await dup(base)),
+    registerSerperRankingWorker(await dup(base)),
   ];
 
   const shutdown = async () => {

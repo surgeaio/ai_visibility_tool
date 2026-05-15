@@ -8,3 +8,5 @@ export * from "@/lib/validators/api-keys.schema";
 export * from "@/lib/validators/citations.schema";
 export * from "@/lib/validators/llm-visibility.schema";
 export * from "@/lib/validators/google-rankings.schema";
+export * from "@/lib/validators/serper.schema";
+export * from "@/lib/validators/dashboard.schema";

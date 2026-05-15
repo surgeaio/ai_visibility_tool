@@ -70,9 +70,11 @@ export default function LoginPage() {
           </Button>
           {status && <p className="text-center text-sm text-neutral-400">{status}</p>}
           <p className="text-center text-xs text-neutral-600">
-            <Link href="/dashboard" className="underline hover:text-white">
-              Skip to dashboard (demo)
-            </Link>
+            {process.env.NODE_ENV !== "production" ? (
+              <Link href="/dashboard" className="underline hover:text-white">
+                Skip to dashboard (demo)
+              </Link>
+            ) : null}
           </p>
         </CardContent>
       </Card>
