@@ -46,3 +46,5 @@ export interface SerperRankingJobData {
   hl?: string;
   requestId?: string;
 }
+
+export type PlatformSchedulerJobName = "prompt-schedules" | "gsc-sync";

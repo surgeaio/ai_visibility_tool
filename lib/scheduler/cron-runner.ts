@@ -1,6 +1,6 @@
 /**
- * Local scheduler process: optionally pings the cron route hourly when APP_URL + CRON_SECRET are set.
- * Vercel production should use vercel.json crons instead.
+ * Optional local dev helper: HTTP-pings the cron route when APP_URL + CRON_SECRET are set.
+ * Production scheduling runs on Railway via BullMQ repeatable jobs in `npm run workers`.
  */
 import cron from "node-cron";
 
@@ -22,7 +22,7 @@ if (appUrl && secret) {
   console.log("[scheduler] hourly HTTP cron enabled →", `${appUrl}/api/cron/run-schedules`);
 } else {
   console.log(
-    "[scheduler] idle (set APP_URL + CRON_SECRET to enable hourly HTTP ping, or rely on Vercel cron in production).",
+    "[scheduler] idle — set APP_URL + CRON_SECRET for local HTTP ping, or run `npm run workers` for BullMQ schedulers.",
   );
 }
 

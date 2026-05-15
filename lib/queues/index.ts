@@ -7,3 +7,4 @@ export * from "@/lib/queues/citation-extraction.queue";
 export * from "@/lib/queues/trend-analysis.queue";
 export * from "@/lib/queues/website-crawl.queue";
 export * from "@/lib/queues/serper-ranking.queue";
+export * from "@/lib/queues/platform-scheduler.queue";
