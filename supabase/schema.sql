@@ -599,6 +599,8 @@ update google_rankings
 set click_through_rate = ctr
 where click_through_rate is null and ctr is not null;
 
+alter table google_rankings add column if not exists serp_features jsonb;
+
 alter table indexed_pages add column if not exists last_crawled_by_google timestamptz;
 
 alter table website_audits add column if not exists crawl_progress integer default 0;

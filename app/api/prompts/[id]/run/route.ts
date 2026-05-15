@@ -1,8 +1,9 @@
-import { serverErrorResponse } from "@/lib/api/errors";
+import { serverErrorResponse, rateLimitResponse } from "@/lib/api/errors";
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateParams } from "@/lib/api/validate";
 import { promptIdParamSchema } from "@/lib/validators";
 import { getPromptExecutionQueue } from "@/lib/queues";
+import { rateLimit } from "@/lib/rate-limit";
 import { PromptsRepository } from "@/lib/repositories";
 import { UserApiKeysRepository } from "@/lib/repositories/user-api-keys.repo";
 
@@ -20,6 +21,11 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     const userId = await getAuthedUserId();
     if (!userId) {
       return Response.json({ error: "Unauthorized", requestId }, { status: 401 });
+    }
+
+    const rl = await rateLimit(`prompt-run:${userId}`);
+    if (!rl.ok) {
+      return rateLimitResponse(requestId);
     }
 
     const hasKeys = await userApiKeysRepo.hasAnyActiveLlmKey(userId);

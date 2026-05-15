@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { toast } from "sonner";
 import { RankPositionChart } from "@/components/charts/RankPositionChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -38,6 +39,7 @@ export default function GoogleRankingsPage() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<GoogleRankingsApi | null>(null);
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
+  const [serperBusy, setSerperBusy] = useState(false);
 
   const load = useCallback(async () => {
     if (!selectedBrandId) return;
@@ -63,6 +65,43 @@ export default function GoogleRankingsPage() {
     void load();
   }, [load]);
 
+  async function runManualSerperCheck() {
+    if (!selectedBrandId) return;
+    setSerperBusy(true);
+    const tid = toast.loading("Running Serper ranking check…");
+    try {
+      const res = await fetch("/api/serper/check-ranking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: selectedBrandId }),
+      });
+      const json = (await res.json()) as {
+        error?: string;
+        status?: string;
+        jobId?: string | null;
+        rowsWritten?: number;
+        keywordsChecked?: number;
+      };
+      toast.dismiss(tid);
+      if (!res.ok) {
+        throw new Error(json.error ?? `HTTP ${res.status}`);
+      }
+      if (json.status === "queued") {
+        toast.success(`Queued job ${json.jobId ?? ""}. Refresh when the worker finishes.`);
+      } else {
+        toast.success(
+          `Serper check complete: ${json.rowsWritten ?? 0} rows, ${json.keywordsChecked ?? 0} keywords.`,
+        );
+      }
+      void load();
+    } catch (e) {
+      toast.dismiss(tid);
+      toast.error(e instanceof Error ? e.message : "Serper check failed");
+    } finally {
+      setSerperBusy(false);
+    }
+  }
+
   const siteName = brandName || DEMO_BRAND.name;
   const s = data?.summary;
   const lastSync = data?.lastSyncedAt
@@ -75,10 +114,21 @@ export default function GoogleRankingsPage() {
         <div>
           <h2 className="text-lg font-semibold text-white">Google rankings</h2>
           <p className="text-sm text-neutral-500">
-            Search performance from your connected property when Google Search Console is linked.
+            Search performance from Google Search Console when linked. Optional Serper.dev snapshots add live SERP
+            positions (including competitors) without replacing GSC data.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="border border-sky-800 bg-transparent text-sky-300 hover:bg-sky-950/50"
+            disabled={!selectedBrandId || serperBusy}
+            onClick={() => void runManualSerperCheck()}
+          >
+            {serperBusy ? "Checking…" : "Manual ranking check"}
+          </Button>
           <select
             className="rounded-md border border-[#262626] bg-[#111] px-2 py-1.5 text-sm text-white"
             value={range}

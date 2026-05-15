@@ -20,12 +20,20 @@ export function isStrictLlmExecution(): boolean {
   return v === "true" || v === "1" || v === "yes";
 }
 
-/** True when auth enforcement should be skipped (explicit demo flag or Supabase not configured). */
+function hasSupabaseBrowserConfig(): boolean {
+  return Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim());
+}
+
+/**
+ * Auth bypass: only for local/demo when explicitly enabled OR when Supabase is not configured.
+ * In production, NEVER bypasses (even if DEMO_* were mistakenly set — auth stays enforced; fix env).
+ */
 export function isAuthBypassMode(): boolean {
+  if (process.env.NODE_ENV === "production") {
+    return false;
+  }
   if (process.env.DEMO_MODE === "true") return true;
   if (process.env.NEXT_PUBLIC_DEMO_MODE === "true") return true;
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
-  if (!url || !key) return true;
+  if (!hasSupabaseBrowserConfig()) return true;
   return false;
 }

@@ -13,7 +13,7 @@ const resultsRepo = new ResultsRepository();
 export async function POST(req: Request) {
   const requestId = getRequestId(req);
   const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "anon";
-  const rl = rateLimit(`analyze:${ip}`);
+  const rl = await rateLimit(`analyze:${ip}`);
   if (!rl.ok) {
     return rateLimitResponse(requestId);
   }

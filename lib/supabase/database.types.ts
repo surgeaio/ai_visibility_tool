@@ -128,6 +128,48 @@ export interface Database {
         }>;
         Relationships: [];
       };
+      prompt_schedules: {
+        Row: {
+          id: string;
+          prompt_id: string;
+          brand_id: string;
+          frequency: string;
+          cron_expression: string | null;
+          timezone: string | null;
+          is_paused: boolean | null;
+          next_run_at: string | null;
+          last_run_at: string | null;
+          last_run_status: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          prompt_id: string;
+          brand_id: string;
+          frequency?: string;
+          cron_expression?: string | null;
+          timezone?: string | null;
+          is_paused?: boolean | null;
+          next_run_at?: string | null;
+          last_run_at?: string | null;
+          last_run_status?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<{
+          id: string;
+          prompt_id: string;
+          brand_id: string;
+          frequency: string;
+          cron_expression: string | null;
+          timezone: string | null;
+          is_paused: boolean | null;
+          next_run_at: string | null;
+          last_run_at: string | null;
+          last_run_status: string | null;
+          created_at: string | null;
+        }>;
+        Relationships: [];
+      };
       competitors: {
         Row: {
           id: string;
@@ -398,6 +440,7 @@ export interface Database {
           device: string | null;
           measured_date: string;
           created_at: string | null;
+          serp_features: Record<string, unknown> | null;
         };
         Insert: {
           id?: string;
@@ -413,6 +456,7 @@ export interface Database {
           device?: string | null;
           measured_date: string;
           created_at?: string | null;
+          serp_features?: Record<string, unknown> | null;
         };
         Update: Partial<{
           id: string;
@@ -428,6 +472,7 @@ export interface Database {
           device: string | null;
           measured_date: string;
           created_at: string | null;
+          serp_features: Record<string, unknown> | null;
         }>;
         Relationships: [];
       };

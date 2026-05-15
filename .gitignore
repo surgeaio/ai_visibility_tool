@@ -34,3 +34,24 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Env (never commit secrets) — keep example tracked
+.env
+.env.*
+!.env.example
+
+# Editors / tooling
+.vscode/
+.idea/
+.cursor/
+
+# Logs & caches
+*.log
+logs/
+.turbo/
+.cache/
+dist/
+
+# Supabase CLI
+supabase/.temp/
+supabase/.branches/
