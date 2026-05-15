@@ -7,6 +7,8 @@ import { registerPromptExecutionWorker } from "./prompt.worker";
 import { registerRecommendationWorker } from "./recommendation.worker";
 import { registerSentimentAnalysisWorker } from "./sentiment.worker";
 import { registerTrendWorker } from "./trend.worker";
+import { registerPlatformSchedulerWorker } from "./platform-scheduler.worker";
+import { registerPlatformSchedulerJobs } from "@/lib/scheduler/register-repeatable-jobs";
 
 async function duplicateConnection(parent: IORedis): Promise<IORedis> {
   const child = parent.duplicate();
@@ -34,8 +36,11 @@ async function main() {
     return c;
   };
 
+  await registerPlatformSchedulerJobs();
+
   const workers = [
     registerPromptExecutionWorker(base),
+    registerPlatformSchedulerWorker(await dup(base)),
     registerSentimentAnalysisWorker(await dup(base)),
     registerRecommendationWorker(await dup(base)),
     registerCitationWorker(await dup(base)),
@@ -43,6 +48,8 @@ async function main() {
     registerWebsiteCrawlWorker(await dup(base)),
     registerSerperRankingWorker(await dup(base)),
   ];
+
+  console.log("[workers] BullMQ workers running (scheduler: hourly prompt schedules, daily GSC sync).");
 
   const shutdown = async () => {
     await Promise.all(workers.map((w) => w.close()));

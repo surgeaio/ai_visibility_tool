@@ -7,6 +7,7 @@ export const TREND_ANALYSIS_QUEUE_NAME = "trend-analysis";
 
 export const WEBSITE_CRAWL_QUEUE_NAME = "website-crawl";
 export const SERPER_RANKING_QUEUE_NAME = "serper-ranking";
+export const PLATFORM_SCHEDULER_QUEUE_NAME = "platform-scheduler";
 
 export const BULL_QUEUE_NAMES = [
   PROMPT_EXECUTION_QUEUE_NAME,
@@ -16,4 +17,5 @@ export const BULL_QUEUE_NAMES = [
   TREND_ANALYSIS_QUEUE_NAME,
   WEBSITE_CRAWL_QUEUE_NAME,
   SERPER_RANKING_QUEUE_NAME,
+  PLATFORM_SCHEDULER_QUEUE_NAME,
 ] as const;

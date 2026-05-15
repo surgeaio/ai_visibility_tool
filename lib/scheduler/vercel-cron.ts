@@ -1,2 +1,2 @@
-/** Vercel Cron target — keep aligned with `vercel.json`. */
-export const VERCEL_CRON_RUN_SCHEDULES_PATH = "/api/cron/run-schedules";
+/** Manual cron API path (trigger with CRON_SECRET; not scheduled on Vercel Hobby). */
+export const CRON_RUN_SCHEDULES_PATH = "/api/cron/run-schedules";
