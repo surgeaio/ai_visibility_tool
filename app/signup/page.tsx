@@ -6,7 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { getAuthErrorMessage } from "@/lib/auth/error-messages";
 import { createClientSafe } from "@/lib/supabase/client";
+
+function authRedirectUrl(): string {
+  const fromEnv = process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/, "");
+  if (fromEnv) return `${fromEnv}/auth/callback`;
+  if (typeof window !== "undefined") return `${window.location.origin}/auth/callback`;
+  return "/auth/callback";
+}
 
 export default function SignupPage() {
   const supabase = createClientSafe();
@@ -37,16 +45,15 @@ export default function SignupPage() {
     }
 
     setLoading(true);
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
-      options: { emailRedirectTo: `${origin}/auth/callback` },
+      options: { emailRedirectTo: authRedirectUrl() },
     });
     setLoading(false);
 
     if (error) {
-      setStatus(error.message);
+      setStatus(getAuthErrorMessage(error));
       return;
     }
 
