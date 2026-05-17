@@ -70,3 +70,9 @@ export async function pingRedis(): Promise<boolean> {
     return false;
   }
 }
+
+/** True when a Redis TCP URL is configured (BullMQ may still fail to connect). */
+export function isRedisAvailable(): boolean {
+  const url = process.env.REDIS_URL ?? process.env.UPSTASH_REDIS_URL;
+  return Boolean(url?.trim());
+}

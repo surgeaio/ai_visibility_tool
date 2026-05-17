@@ -2,84 +2,15 @@ import type IORedis from "ioredis";
 import { Worker } from "bullmq";
 import { WEBSITE_CRAWL_QUEUE_NAME } from "@/lib/queues/queue-names";
 import type { WebsiteCrawlJobData } from "@/lib/queues/types";
-import { WebsiteCrawler } from "@/lib/services/website-crawler";
-import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
+import { runWebsiteAuditSync } from "@/lib/services/website-audit-runner";
 
 export function registerWebsiteCrawlWorker(connection: IORedis) {
   return new Worker<WebsiteCrawlJobData>(
     WEBSITE_CRAWL_QUEUE_NAME,
     async (job) => {
       const { brandId, siteUrl, maxPages } = job.data;
-      const admin = tryCreateAdminSupabaseClient();
-      const crawler = new WebsiteCrawler();
-      try {
-        await crawler.initialize();
-        const pages = await crawler.crawlSite(siteUrl, Math.min(Math.max(1, maxPages), 100));
-        const critical = pages.reduce(
-          (a, p) => a + p.issues.filter((i) => i.severity === "critical").length,
-          0,
-        );
-        const warnings = pages.reduce(
-          (a, p) => a + p.issues.filter((i) => i.severity === "warning").length,
-          0,
-        );
-        const overall =
-          pages.length > 0
-            ? Math.max(0, Math.min(100, 100 - critical * 3 - Math.min(40, warnings)))
-            : 0;
-
-        if (!admin) {
-          return { ok: true as const, pages: pages.length, auditId: null, note: "no_service_role" };
-        }
-
-        const { data: audit, error: aErr } = await admin
-          .from("website_audits")
-          .insert({
-            brand_id: brandId,
-            total_pages: pages.length,
-            pages_with_issues: pages.filter((p) => p.issues.length > 0).length,
-            critical_issues: critical,
-            warnings,
-            overall_score: overall,
-            audit_completed_at: new Date().toISOString(),
-            crawl_progress: 100,
-          })
-          .select("id")
-          .single();
-        if (aErr) throw new Error(aErr.message);
-        const auditId = audit.id as string;
-
-        for (const p of pages) {
-          const { error: pErr } = await admin.from("page_audits").insert({
-            audit_id: auditId,
-            brand_id: brandId,
-            url: p.url,
-            title: p.title,
-            title_length: p.titleLength,
-            meta_description: p.metaDescription,
-            meta_description_length: p.metaDescriptionLength,
-            h1_count: p.h1Count,
-            word_count: p.wordCount,
-            internal_links_count: p.internalLinks,
-            external_links_count: p.externalLinks,
-            images_count: p.images,
-            images_without_alt: p.imagesWithoutAlt,
-            has_schema: p.hasSchema,
-            schema_types: p.schemaTypes,
-            has_faq_schema: p.hasFaqSchema,
-            page_speed_mobile: null,
-            page_speed_desktop: null,
-            issues: p.issues,
-            canonical_url: p.canonicalUrl,
-            robots_meta: p.robotsMeta,
-          });
-          if (pErr) console.error("[crawl] page insert", pErr.message);
-        }
-
-        return { ok: true as const, pages: pages.length, auditId };
-      } finally {
-        await crawler.cleanup();
-      }
+      const result = await runWebsiteAuditSync({ brandId, siteUrl, maxPages });
+      return { ok: true as const, ...result };
     },
     { connection, concurrency: 1 },
   );
