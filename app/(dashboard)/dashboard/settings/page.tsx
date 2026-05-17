@@ -15,9 +15,6 @@ export default function SettingsPage() {
         <p className="text-sm text-neutral-500">Workspace preferences and integrations (demo UI).</p>
         <div className="mt-3 flex flex-wrap gap-2">
           <Button asChild variant="secondary" size="sm">
-            <Link href="/dashboard/settings/api-keys">API keys</Link>
-          </Button>
-          <Button asChild variant="secondary" size="sm">
             <Link href="/dashboard/settings/billing">Billing</Link>
           </Button>
         </div>

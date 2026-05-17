@@ -168,18 +168,18 @@ export default function OverviewPage() {
       {emptyLive ? (
         <DashboardEmptyState
           title="No tracking data yet"
-          description="Add prompts and API keys, then run a prompt check. Data will appear here after the first successful LLM run."
+          description="Run your first prompt to see brand visibility data here."
           icon={LayoutDashboard}
           action={
             <div className="flex flex-wrap gap-2">
               <Link
-                href="/dashboard/prompts"
+                href="/dashboard/llm-visibility"
                 className="rounded-md bg-white px-3 py-1.5 text-sm font-medium text-black hover:bg-neutral-200"
               >
-                Add prompts
+                Run prompts
               </Link>
-              <Link href="/dashboard/settings/api-keys" className="text-sm text-sky-400 hover:underline">
-                API keys
+              <Link href="/dashboard/prompts" className="text-sm text-sky-400 hover:underline">
+                Manage prompts
               </Link>
             </div>
           }
