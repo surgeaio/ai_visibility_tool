@@ -1,4 +1,5 @@
 import { serverErrorResponse } from "@/lib/api/errors";
+import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateBody, validateQuery } from "@/lib/api/validate";
 import { createPromptApiSchema, listPromptsQuerySchema } from "@/lib/validators";
 import { PromptsRepository } from "@/lib/repositories";
@@ -32,8 +33,9 @@ export async function POST(req: Request) {
   if (!bodyValidation.success) return bodyValidation.response;
 
   try {
-    const { text, category } = bodyValidation.data;
-    const created = await promptsRepo.create({ text, category });
+    const userId = await getAuthedUserId();
+    const { text, category, brandId } = bodyValidation.data;
+    const created = await promptsRepo.create({ text, category, brandId, userId: userId ?? undefined });
     return Response.json({ ...created, requestId });
   } catch (error) {
     console.error(error);

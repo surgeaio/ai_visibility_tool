@@ -17,6 +17,7 @@ export interface PromptCreateInput {
   text: string;
   category: string;
   brandId?: string;
+  userId?: string;
   tags?: string[];
 }
 
@@ -169,6 +170,19 @@ export class PromptsRepository extends BaseRepository<
 
     const supabase = await this.getClient();
     let brandId = input.brandId;
+
+    if (!brandId && input.userId) {
+      const { data: userBrand, error: userBrandError } = await supabase
+        .from("brands")
+        .select("id")
+        .eq("user_id", input.userId)
+        .order("created_at", { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      if (userBrandError) throw new DatabaseError(userBrandError.message);
+      brandId = userBrand?.id;
+    }
+
     if (!brandId) {
       const { data: firstBrand, error: brandError } = await supabase
         .from("brands")

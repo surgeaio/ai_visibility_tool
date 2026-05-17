@@ -65,6 +65,7 @@ export const promptIdParamSchema = z.object({
 export const createPromptApiSchema = z.object({
   text: z.string().trim().min(5).max(500),
   category: z.string().trim().min(1).max(80).default("general"),
+  brandId: z.string().uuid().optional(),
 });
 
 export type PromptCategory = z.infer<typeof promptCategorySchema>;
