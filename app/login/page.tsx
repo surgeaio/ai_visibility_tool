@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,25 @@ import { Label } from "@/components/ui/label";
 import { createClientSafe } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginPageFallback />}>
+      <LoginPageContent />
+    </Suspense>
+  );
+}
+
+function LoginPageFallback() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-black px-4 text-neutral-400">
+      Loading…
+    </div>
+  );
+}
+
+function LoginPageContent() {
   const supabase = createClientSafe();
+  const searchParams = useSearchParams();
+  const authError = searchParams.get("error");
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<string | null>(null);
 
@@ -68,7 +87,16 @@ export default function LoginPage() {
           <Button type="button" variant="secondary" className="w-full" onClick={() => oauth("google")}>
             Continue with Google
           </Button>
+          {authError ? (
+            <p className="text-center text-sm text-red-400">{decodeURIComponent(authError)}</p>
+          ) : null}
           {status && <p className="text-center text-sm text-neutral-400">{status}</p>}
+          <p className="text-center text-xs text-neutral-600">
+            Don&apos;t have an account?{" "}
+            <Link href="/signup" className="underline hover:text-white">
+              Sign up
+            </Link>
+          </p>
           <p className="text-center text-xs text-neutral-600">
             {process.env.NODE_ENV !== "production" ? (
               <Link href="/dashboard" className="underline hover:text-white">
