@@ -17,9 +17,20 @@ export interface PlatformBarDatum {
 }
 
 export function PlatformComparisonChart({ data }: { data: PlatformBarDatum[] }) {
+  const isPlaceholder =
+    !data?.length || (data.length === 1 && data[0]?.name === "—");
+
+  if (isPlaceholder) {
+    return (
+      <div className="flex h-[300px] items-center justify-center text-sm text-neutral-500">
+        No data yet — run some prompts to see this chart.
+      </div>
+    );
+  }
+
   return (
-    <div className="h-[280px] w-full min-h-[200px] min-w-0">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="h-[300px] w-full min-w-0">
+      <ResponsiveContainer width="100%" height={300}>
         <BarChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
           <XAxis dataKey="name" tick={{ fill: "#a3a3a3", fontSize: 11 }} axisLine={{ stroke: "#262626" }} />

@@ -7,9 +7,20 @@ export function VisibilityTrendChart({
 }: {
   data: { day: string; chatgpt: number; claude: number; gemini: number; perplexity: number }[];
 }) {
+  const isPlaceholder =
+    !data?.length || (data.length === 1 && data[0]?.day === "—");
+
+  if (isPlaceholder) {
+    return (
+      <div className="flex h-[300px] items-center justify-center text-sm text-neutral-500">
+        No data yet — run some prompts to see this chart.
+      </div>
+    );
+  }
+
   return (
-    <div className="h-[280px] w-full min-h-[200px] min-w-0">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="h-[300px] w-full min-w-0">
+      <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#262626" />
           <XAxis dataKey="day" tick={{ fill: "#a3a3a3", fontSize: 11 }} axisLine={{ stroke: "#262626" }} />

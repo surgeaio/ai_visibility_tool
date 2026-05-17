@@ -34,10 +34,18 @@ export function VisibilityChart({
   /** When set, renders a single “visibility score” line from live overview data. */
   simpleTrend?: SimpleTrendPoint[];
 }) {
+  if (simpleTrend !== undefined && simpleTrend.length === 0) {
+    return (
+      <div className="flex h-[300px] items-center justify-center text-sm text-neutral-500">
+        No data yet — run some prompts to see this chart.
+      </div>
+    );
+  }
+
   if (simpleTrend?.length) {
     return (
-      <div className="h-[280px] w-full">
-        <ResponsiveContainer width="100%" height="100%">
+      <div className="h-[300px] w-full min-w-0">
+        <ResponsiveContainer width="100%" height={300}>
           <LineChart data={simpleTrend} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="#262626" strokeDasharray="3 3" vertical={false} />
             <XAxis dataKey="label" stroke="#737373" tick={{ fill: "#737373", fontSize: 12 }} />
@@ -64,8 +72,8 @@ export function VisibilityChart({
   }
 
   return (
-    <div className="h-[280px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
+    <div className="h-[300px] w-full min-w-0">
+      <ResponsiveContainer width="100%" height={300}>
         <LineChart data={data} margin={{ top: 8, right: 8, left: 0, bottom: 0 }}>
           <CartesianGrid stroke="#262626" strokeDasharray="3 3" vertical={false} />
           <XAxis dataKey="month" stroke="#737373" tick={{ fill: "#737373", fontSize: 12 }} />
