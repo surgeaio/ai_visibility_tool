@@ -1,4 +1,5 @@
 import { detectBrandMentions } from "@/lib/ai/analyzer";
+import { adminHasLlmProviders, getAdminLlmProviders } from "@/lib/ai/admin-providers";
 import { getLlmProviderInstance, LLM_KEY_TO_PLATFORM_SLUG, type LlmKeyProviderName } from "@/lib/ai/llm-provider-factory";
 import { analyzeSentiment } from "@/lib/ai/sentiment";
 import { isAuthBypassMode } from "@/lib/config";
@@ -96,6 +97,39 @@ async function persistPerformanceRow(params: {
   }
 }
 
+async function persistFailedRow(params: {
+  brandId: string;
+  promptId: string;
+  platform: LLMPlatformKey;
+  error: string;
+}): Promise<void> {
+  const admin = tryCreateAdminSupabaseClient();
+  if (!admin) {
+    console.warn("[llm-tracker] skip failed row: no service role client");
+    return;
+  }
+  const platformId = await resolvePlatformId(admin, params.platform);
+  if (!platformId) return;
+
+  const { error } = await admin.from("llm_brand_performance").insert({
+    brand_id: params.brandId,
+    platform_id: platformId,
+    prompt_id: params.promptId,
+    is_mentioned: false,
+    mention_count: 0,
+    rank_position: null,
+    sentiment: null,
+    sentiment_score: null,
+    visibility_score: 0,
+    raw_response: params.error.slice(0, 4000),
+    context: "execution_failed",
+    measured_at: new Date().toISOString(),
+  });
+  if (error) {
+    console.error("[llm-tracker] insert failed llm_brand_performance", error.message);
+  }
+}
+
 export async function runPromptOnPlatform(params: {
   platform: LLMPlatformKey;
   prompt: string;
@@ -184,23 +218,30 @@ export async function executePromptExecutionJob(
   });
   const competitorNames = compItems.map((c) => c.name);
 
-  const keys = await keysRepo.listActiveLlmKeysDecrypted(job.userId);
-  if (!keys.length) {
-    return { results: [], errors: ["no_llm_keys"] };
+  let providers = getAdminLlmProviders();
+  if (!providers.length) {
+    const userKeys = await keysRepo.listActiveLlmKeysDecrypted(job.userId);
+    providers = userKeys.map((k) => ({ provider: k.provider, apiKey: k.apiKey }));
   }
 
-  const openAiKeyForSentiment = keys.find((k) => k.provider === "openai")?.apiKey;
+  if (!providers.length) {
+    console.error("[llm-tracker] No admin or user provider keys configured");
+    return { results: [], errors: ["no_admin_keys"] };
+  }
+
+  const openAiKeyForSentiment =
+    providers.find((p) => p.provider === "openai")?.apiKey ?? process.env.OPENAI_API_KEY?.trim();
 
   const settled = await Promise.allSettled(
-    keys.map((k) =>
+    providers.map((p) =>
       runPromptOnPlatform({
-        platform: k.provider,
+        platform: p.provider,
         prompt: prompt.text,
         brandName: brand.name,
         competitors: competitorNames,
-        apiKey: k.apiKey,
+        apiKey: p.apiKey,
         openAiKeyForSentiment,
-        requestId: job.requestId ?? `job-${job.promptId}-${k.provider}`,
+        requestId: job.requestId ?? `job-${job.promptId}-${p.provider}`,
       }),
     ),
   );
@@ -208,21 +249,27 @@ export async function executePromptExecutionJob(
   const results: LLMTrackingResult[] = [];
   const errors: string[] = [];
   settled.forEach((r, i) => {
+    const provider = providers[i].provider;
     if (r.status === "fulfilled") {
       results.push(r.value);
       void persistPerformanceRow({
         brandId,
         promptId: job.promptId,
-        platform: keys[i].provider,
+        platform: provider,
         result: r.value,
       });
     } else {
-      errors.push(`${keys[i].provider}: ${r.reason instanceof Error ? r.reason.message : String(r.reason)}`);
+      const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
+      console.error(`[llm-run] ${provider} failed:`, msg);
+      errors.push(`${provider}: ${msg}`);
+      void persistFailedRow({ brandId, promptId: job.promptId, platform: provider, error: msg });
     }
   });
 
   return { results, errors };
 }
+
+export { adminHasLlmProviders };
 
 /** @deprecated Prefer `executePromptExecutionJob` from workers. */
 export class LLMTracker {
