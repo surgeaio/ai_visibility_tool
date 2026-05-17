@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { RunPromptsModal } from "./_components/RunPromptsModal";
 import { PlatformComparisonChart } from "@/components/charts/PlatformComparisonChart";
 import { VisibilityTrendChart } from "@/components/charts/VisibilityTrendChart";
 import { Badge } from "@/components/ui/badge";
@@ -29,6 +30,7 @@ export default function LlmVisibilityPage() {
   const [error, setError] = useState<string | null>(null);
   const [source, setSource] = useState<"demo" | "live" | null>(null);
   const [payload, setPayload] = useState<LlmVisibilityPayload | null>(null);
+  const [runModalOpen, setRunModalOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!selectedBrandId) return;
@@ -93,6 +95,9 @@ export default function LlmVisibilityPage() {
               {source === "demo" ? "Demo data" : "Live data"}
             </Badge>
           ) : null}
+          <Button size="sm" onClick={() => setRunModalOpen(true)}>
+            Run prompts now
+          </Button>
         </div>
       </div>
 
@@ -107,13 +112,18 @@ export default function LlmVisibilityPage() {
           <CardHeader>
             <CardTitle className="text-base text-white">No LLM checks yet</CardTitle>
             <p className="text-sm text-neutral-500">
-              Run a prompt with your provider keys to populate scores and sentiment.
+              Run prompts to populate scores and sentiment across AI assistants.
             </p>
           </CardHeader>
           <CardContent>
-            <Button asChild size="sm" variant="secondary">
-              <Link href="/dashboard/prompts">Go to prompts</Link>
-            </Button>
+            <div className="flex flex-wrap gap-3">
+              <Button asChild size="sm" variant="secondary">
+                <Link href="/dashboard/prompts">Go to prompts</Link>
+              </Button>
+              <Button size="sm" onClick={() => setRunModalOpen(true)}>
+                Run prompts now
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -161,14 +171,14 @@ export default function LlmVisibilityPage() {
                 <CardTitle className="text-base text-white">Visibility trend</CardTitle>
                 <p className="text-sm text-neutral-500">Daily highs per assistant (when history exists).</p>
               </CardHeader>
-              <VisibilityTrendChart data={trend.length ? trend : [{ day: "—", chatgpt: 0, claude: 0, gemini: 0, perplexity: 0 }]} />
+              <VisibilityTrendChart data={trend} />
             </Card>
             <Card className="min-w-0 border-[#262626] bg-[#111] p-6">
               <CardHeader className="px-0 pt-0">
                 <CardTitle className="text-base text-white">Compare platforms</CardTitle>
                 <p className="text-sm text-neutral-500">Scores from 0 (invisible) to 100 (strong presence).</p>
               </CardHeader>
-              <PlatformComparisonChart data={barData.length ? barData : [{ name: "—", score: 0 }]} />
+              <PlatformComparisonChart data={barData} />
             </Card>
           </div>
 
@@ -247,6 +257,12 @@ export default function LlmVisibilityPage() {
           </div>
         </>
       )}
+
+      <RunPromptsModal
+        open={runModalOpen}
+        onClose={() => setRunModalOpen(false)}
+        onSuccess={() => void load()}
+      />
     </div>
   );
 }
