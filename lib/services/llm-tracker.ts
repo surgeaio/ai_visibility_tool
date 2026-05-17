@@ -1,6 +1,6 @@
 import { detectBrandMentions } from "@/lib/ai/analyzer";
 import { adminHasLlmProviders, getAdminLlmProviders } from "@/lib/ai/admin-providers";
-import { getLlmProviderInstance, LLM_KEY_TO_PLATFORM_SLUG, type LlmKeyProviderName } from "@/lib/ai/llm-provider-factory";
+import { getLlmProviderInstance, type LlmKeyProviderName } from "@/lib/ai/llm-provider-factory";
 import { analyzeSentiment } from "@/lib/ai/sentiment";
 import { isAuthBypassMode } from "@/lib/config";
 import type { PromptExecutionJobData } from "@/lib/queues/types";
@@ -9,6 +9,7 @@ import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
 import { PromptsRepository } from "@/lib/repositories/prompts.repo";
 import { BrandsRepository } from "@/lib/repositories/brands.repo";
 import { CompetitorsRepository } from "@/lib/repositories/competitors.repo";
+import { ensureLlmPlatformsSeeded, resolvePlatformIdForProvider } from "@/lib/services/llm-platforms-seed";
 
 export type LLMPlatformKey = LlmKeyProviderName;
 
@@ -51,50 +52,47 @@ function calculateVisibilityScore(params: {
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
-async function resolvePlatformId(
-  admin: NonNullable<ReturnType<typeof tryCreateAdminSupabaseClient>>,
-  provider: LLMPlatformKey,
-): Promise<string | null> {
-  const slug = LLM_KEY_TO_PLATFORM_SLUG[provider];
-  const { data, error } = await admin.from("llm_platforms").select("id").eq("name", slug).maybeSingle();
-  if (error) {
-    console.error("[llm-tracker] platform lookup", error.message);
-    return null;
-  }
-  return (data as { id: string } | null)?.id ?? null;
-}
-
 async function persistPerformanceRow(params: {
   brandId: string;
   promptId: string;
   platform: LLMPlatformKey;
   result: LLMTrackingResult;
 }): Promise<void> {
+  console.log(
+    `[persist] start provider=${params.platform} brand=${params.brandId} prompt=${params.promptId}`,
+  );
+
+  const platformId = await resolvePlatformIdForProvider(params.platform);
   const admin = tryCreateAdminSupabaseClient();
   if (!admin) {
-    console.warn("[llm-tracker] skip persist: no service role client");
-    return;
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY missing — cannot write llm_brand_performance");
   }
-  const platformId = await resolvePlatformId(admin, params.platform);
-  if (!platformId) return;
 
-  const { error } = await admin.from("llm_brand_performance").insert({
-    brand_id: params.brandId,
-    platform_id: platformId,
-    prompt_id: params.promptId,
-    is_mentioned: params.result.isMentioned,
-    mention_count: params.result.mentionCount,
-    rank_position: params.result.rankPosition,
-    sentiment: params.result.sentiment,
-    sentiment_score: params.result.sentimentScore,
-    visibility_score: params.result.visibilityScore,
-    raw_response: params.result.rawResponse,
-    context: params.result.context,
-    measured_at: new Date().toISOString(),
-  });
+  const { data, error } = await admin
+    .from("llm_brand_performance")
+    .insert({
+      brand_id: params.brandId,
+      platform_id: platformId,
+      prompt_id: params.promptId,
+      is_mentioned: params.result.isMentioned,
+      mention_count: params.result.mentionCount,
+      rank_position: params.result.rankPosition,
+      sentiment: params.result.sentiment,
+      sentiment_score: params.result.sentimentScore,
+      visibility_score: params.result.visibilityScore,
+      raw_response: params.result.rawResponse,
+      context: params.result.context,
+      measured_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
   if (error) {
-    console.error("[llm-tracker] insert llm_brand_performance", error.message);
+    console.error("[persist] INSERT failed:", error.message, error);
+    throw new Error(`Failed to persist llm_brand_performance: ${error.message}`);
   }
+
+  console.log(`[persist] OK row id=${(data as { id: string }).id}`);
 }
 
 async function persistFailedRow(params: {
@@ -103,13 +101,13 @@ async function persistFailedRow(params: {
   platform: LLMPlatformKey;
   error: string;
 }): Promise<void> {
+  console.log(`[persist] failed row provider=${params.platform} error=${params.error.slice(0, 80)}`);
+
+  const platformId = await resolvePlatformIdForProvider(params.platform);
   const admin = tryCreateAdminSupabaseClient();
   if (!admin) {
-    console.warn("[llm-tracker] skip failed row: no service role client");
-    return;
+    throw new Error("SUPABASE_SERVICE_ROLE_KEY missing — cannot write failed llm_brand_performance row");
   }
-  const platformId = await resolvePlatformId(admin, params.platform);
-  if (!platformId) return;
 
   const { error } = await admin.from("llm_brand_performance").insert({
     brand_id: params.brandId,
@@ -125,8 +123,10 @@ async function persistFailedRow(params: {
     context: "execution_failed",
     measured_at: new Date().toISOString(),
   });
+
   if (error) {
-    console.error("[llm-tracker] insert failed llm_brand_performance", error.message);
+    console.error("[persist] failed-row INSERT error:", error.message);
+    throw new Error(`Failed to persist failed row: ${error.message}`);
   }
 }
 
@@ -196,6 +196,10 @@ export async function runPromptOnPlatform(params: {
 export async function executePromptExecutionJob(
   job: PromptExecutionJobData,
 ): Promise<{ results: LLMTrackingResult[]; errors: string[] }> {
+  console.log("[llm-tracker] START", JSON.stringify(job));
+
+  await ensureLlmPlatformsSeeded();
+
   const keysRepo = new UserApiKeysRepository();
   const promptsRepo = new PromptsRepository();
   const brandsRepo = new BrandsRepository();
@@ -203,14 +207,18 @@ export async function executePromptExecutionJob(
 
   const prompt = await promptsRepo.findById(job.promptId);
   if (!prompt) {
+    console.error("[llm-tracker] prompt_not_found", job.promptId);
     return { results: [], errors: ["prompt_not_found"] };
   }
 
   const brandId = job.brandId ?? prompt.brandId;
   const brand = await brandsRepo.findById(brandId);
   if (!brand) {
+    console.error("[llm-tracker] brand_not_found", brandId);
     return { results: [], errors: ["brand_not_found"] };
   }
+
+  console.log("[llm-tracker] brand", { brandId, brandName: brand.name, promptBrandId: prompt.brandId });
 
   const { items: compItems } = await competitorsRepo.findMany({
     pagination: { limit: 50, offset: 0 },
@@ -224,6 +232,11 @@ export async function executePromptExecutionJob(
     providers = userKeys.map((k) => ({ provider: k.provider, apiKey: k.apiKey }));
   }
 
+  console.log(
+    "[llm-tracker] providers:",
+    providers.map((p) => p.provider).join(",") || "(none)",
+  );
+
   if (!providers.length) {
     console.error("[llm-tracker] No admin or user provider keys configured");
     return { results: [], errors: ["no_admin_keys"] };
@@ -232,40 +245,43 @@ export async function executePromptExecutionJob(
   const openAiKeyForSentiment =
     providers.find((p) => p.provider === "openai")?.apiKey ?? process.env.OPENAI_API_KEY?.trim();
 
-  const settled = await Promise.allSettled(
-    providers.map((p) =>
-      runPromptOnPlatform({
+  const results: LLMTrackingResult[] = [];
+  const errors: string[] = [];
+
+  for (const p of providers) {
+    const requestId = job.requestId ?? `job-${job.promptId}-${p.provider}`;
+    try {
+      console.log(`[llm-tracker] calling ${p.provider} for prompt ${job.promptId}`);
+      const result = await runPromptOnPlatform({
         platform: p.provider,
         prompt: prompt.text,
         brandName: brand.name,
         competitors: competitorNames,
         apiKey: p.apiKey,
         openAiKeyForSentiment,
-        requestId: job.requestId ?? `job-${job.promptId}-${p.provider}`,
-      }),
-    ),
-  );
-
-  const results: LLMTrackingResult[] = [];
-  const errors: string[] = [];
-  settled.forEach((r, i) => {
-    const provider = providers[i].provider;
-    if (r.status === "fulfilled") {
-      results.push(r.value);
-      void persistPerformanceRow({
+        requestId,
+      });
+      results.push(result);
+      await persistPerformanceRow({
         brandId,
         promptId: job.promptId,
-        platform: provider,
-        result: r.value,
+        platform: p.provider,
+        result,
       });
-    } else {
-      const msg = r.reason instanceof Error ? r.reason.message : String(r.reason);
-      console.error(`[llm-run] ${provider} failed:`, msg);
-      errors.push(`${provider}: ${msg}`);
-      void persistFailedRow({ brandId, promptId: job.promptId, platform: provider, error: msg });
+      console.log(`[llm-tracker] persisted OK for ${p.provider}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[llm-run] ${p.provider} failed:`, msg);
+      errors.push(`${p.provider}: ${msg}`);
+      try {
+        await persistFailedRow({ brandId, promptId: job.promptId, platform: p.provider, error: msg });
+      } catch (persistErr) {
+        console.error(`[llm-tracker] could not persist failed row:`, persistErr);
+      }
     }
-  });
+  }
 
+  console.log("[llm-tracker] DONE", { ok: results.length, errors: errors.length });
   return { results, errors };
 }
 
