@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import type { LlmVisibilityPayload } from "@/lib/types/llm-visibility";
 import { useSelectedBrand } from "@/lib/context/brand-context";
+import { useDashboardStore } from "@/store/dashboard";
 
 type ApiLlmResponse = {
   source: "demo" | "live";
@@ -25,6 +26,7 @@ function sentimentLabel(s: "positive" | "neutral" | "negative") {
 
 export default function LlmVisibilityPage() {
   const { selectedBrandId } = useSelectedBrand();
+  const brandName = useDashboardStore((s) => s.brandName);
   const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -113,6 +115,12 @@ export default function LlmVisibilityPage() {
             <CardTitle className="text-base text-white">No LLM checks yet</CardTitle>
             <p className="text-sm text-neutral-500">
               Run prompts to populate scores and sentiment across AI assistants.
+            </p>
+            <p className="mt-1 text-xs text-neutral-600">
+              Selected brand:{" "}
+              <span className="text-neutral-400">{brandName || selectedBrandId || "none"}</span>
+              {" · "}
+              Date range: <span className="text-neutral-400">{range}</span>
             </p>
           </CardHeader>
           <CardContent>

@@ -82,8 +82,11 @@ export function RunPromptsModal({ open, onClose, onSuccess }: Props) {
       }
 
       setPromptsText("");
-      onSuccess();
       onClose();
+      onSuccess();
+      setTimeout(() => {
+        if (typeof window !== "undefined") window.location.reload();
+      }, 500);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Network error");
     } finally {
