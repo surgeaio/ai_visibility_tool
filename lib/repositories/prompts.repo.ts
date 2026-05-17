@@ -171,6 +171,8 @@ export class PromptsRepository extends BaseRepository<
     const supabase = await this.getClient();
     let brandId = input.brandId;
 
+    console.log(`[prompts.create] input.brandId=${input.brandId ?? "—"} userId=${input.userId ?? "—"}`);
+
     if (!brandId && input.userId) {
       const { data: userBrand, error: userBrandError } = await supabase
         .from("brands")
@@ -181,6 +183,7 @@ export class PromptsRepository extends BaseRepository<
         .maybeSingle();
       if (userBrandError) throw new DatabaseError(userBrandError.message);
       brandId = userBrand?.id;
+      console.log(`[prompts.create] user brand fallback: ${brandId ?? "none"}`);
     }
 
     if (!brandId) {
@@ -191,6 +194,7 @@ export class PromptsRepository extends BaseRepository<
         .maybeSingle();
       if (brandError) throw new DatabaseError(brandError.message);
       brandId = firstBrand?.id;
+      console.log(`[prompts.create] global first brand fallback: ${brandId ?? "none"}`);
     }
     if (!brandId) throw new DatabaseError("No brand available for prompt creation");
 
