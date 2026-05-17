@@ -88,12 +88,24 @@ export default function WebsiteAuditPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brandId: selectedBrandId, maxPages: 25 }),
       });
-      const json = (await res.json()) as { jobId?: string; status?: string; note?: string; error?: string };
+      const json = (await res.json()) as {
+        jobId?: string;
+        status?: string;
+        mode?: string;
+        note?: string;
+        error?: string;
+      };
       if (!res.ok) throw new Error(json.error ?? "Failed to start crawl");
       if (json.status === "queued") {
         toast.success("Crawl queued. Results appear after the worker finishes.");
+      } else if (json.status === "completed") {
+        toast.success("Audit complete.");
+        await load();
+      } else if (json.mode === "sync") {
+        toast.message("Audit running synchronously (may take 30–60s)…");
+        await load();
       } else {
-        toast.message(json.note ?? "Start Redis workers to process crawls.");
+        toast.message(json.note ?? "Audit started.");
       }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Could not start audit");
