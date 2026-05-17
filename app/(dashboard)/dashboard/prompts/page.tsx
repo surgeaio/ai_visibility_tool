@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Download, MoreHorizontal, Plus, Play, RefreshCw } from "lucide-react";
 import { SentimentBadge } from "@/components/dashboard/SentimentBadge";
-import { ResponseViewer } from "@/components/dashboard/ResponseViewer";
+import { PromptDetailSheet } from "@/components/dashboard/PromptDetailSheet";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -23,9 +23,6 @@ import { DEMO_BRAND } from "@/lib/demo/seed-data";
 import { useSelectedBrand } from "@/lib/context/brand-context";
 import { useDashboardStore } from "@/store/dashboard";
 
-const DEMO_RESPONSE =
-  "For startups comparing CRMs, HubSpot remains popular for breadth while Attio stands out for a modern UX and flexible data model. Salesforce leads enterprise complexity.";
-
 export default function PromptsPage() {
   const { selectedBrandId } = useSelectedBrand();
   const brandName = useDashboardStore((s) => s.brandName);
@@ -42,12 +39,36 @@ export default function PromptsPage() {
   const [runNow, setRunNow] = useState(true);
   const [saving, setSaving] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [llmResults, setLlmResults] = useState<
+    Array<{
+      platform: string;
+      rawResponse: string;
+      visibilityScore: number | null;
+      sentimentScore: number | null;
+    }>
+  >([]);
+  const [llmResultsLoading, setLlmResultsLoading] = useState(false);
 
   useEffect(() => {
     void fetchApiPrompts();
   }, [fetchApiPrompts]);
 
   const detail = useMemo(() => prompts.find((p) => p.id === detailId), [prompts, detailId]);
+
+  useEffect(() => {
+    if (!detailId) {
+      setLlmResults([]);
+      return;
+    }
+    setLlmResultsLoading(true);
+    void fetch(`/api/prompts/${encodeURIComponent(detailId)}/llm-results`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((json: { results?: typeof llmResults }) => {
+        setLlmResults(json.results ?? []);
+      })
+      .catch(() => setLlmResults([]))
+      .finally(() => setLlmResultsLoading(false));
+  }, [detailId]);
 
   const selectedIds = Object.entries(selected)
     .filter(([, v]) => v)
@@ -325,22 +346,11 @@ export default function PromptsPage() {
             <SheetDescription className="text-left">{detail?.text}</SheetDescription>
           </SheetHeader>
           <div className="mt-6 space-y-6">
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase text-neutral-500">ChatGPT · excerpt</p>
-              <ResponseViewer
-                text={DEMO_RESPONSE}
-                brandName={brandName || DEMO_BRAND.name}
-                competitorNames={["HubSpot", "Salesforce"]}
-              />
-            </div>
-            <div>
-              <p className="mb-2 text-xs font-medium uppercase text-neutral-500">Claude · excerpt</p>
-              <ResponseViewer
-                text={DEMO_RESPONSE}
-                brandName={brandName || DEMO_BRAND.name}
-                competitorNames={["HubSpot"]}
-              />
-            </div>
+            <PromptDetailSheet
+              brandName={brandName || DEMO_BRAND.name}
+              loading={llmResultsLoading}
+              results={llmResults}
+            />
           </div>
         </SheetContent>
       </Sheet>
