@@ -12,6 +12,7 @@
     "workers": "tsx workers/index.ts",
     "scheduler": "tsx lib/scheduler/cron-runner.ts",
     "db:seed": "tsx scripts/seed.ts",
+    "seed:test-user": "tsx scripts/seed-test-user.ts",
     "db:migrate": "npx supabase migration up",
     "db:reset": "npx supabase db reset",
     "db:types": "node scripts/write-supabase-types.mjs",

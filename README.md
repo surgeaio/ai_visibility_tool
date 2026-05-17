@@ -11,6 +11,18 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). With no Supabase keys, **demo / auth bypass** mode serves seeded UI data (see `lib/config.ts`).
 
+## Demo login
+
+For quick testing without signup (requires `npm run seed:test-user` once with service role key in `.env.local`):
+
+- **URL:** https://ai-visibility-tool-nu.vercel.app/login
+- **Email:** `demo@aivisibility.test`
+- **Password:** `DemoUser2026!Visibility`
+
+Reset or recreate anytime: `npm run seed:test-user`
+
+Google sign-in: see [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md).
+
 **Intelligence phase:** set `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (and optional `GOOGLE_AI_API_KEY`, `PERPLEXITY_API_KEY`) for real model calls. Use `STRICT_LLM_EXECUTION=true` in production to forbid synthetic LLM placeholder text when a key is missing. Run **`npm run dev:full`** for Next.js + BullMQ workers + scheduler (requires `REDIS_URL`).
 
 ## Scripts
@@ -25,6 +37,7 @@ Open [http://localhost:3000](http://localhost:3000). With no Supabase keys, **de
 | `npm run db:migrate` | Apply SQL migrations to **local** Postgres (`npx supabase start` / Docker required) |
 | `npm run db:types` | Regenerate `lib/supabase/database.types.ts` from local DB (writes only on success; requires `supabase start`) |
 | `npm run db:seed` | Optional seed helper (needs service role key) |
+| `npm run seed:test-user` | Create/update demo login user in Supabase |
 
 ## Docs
 
