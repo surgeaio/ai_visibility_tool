@@ -1,8 +1,10 @@
 import { isAuthBypassMode } from "@/lib/config";
 import { serverErrorResponse } from "@/lib/api/errors";
+import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateQuery } from "@/lib/api/validate";
 import { llmVisibilityQuerySchema } from "@/lib/validators";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
 import {
   DEMO_LLM_PLATFORM_SCORES,
   DEMO_LLM_TREND,
@@ -63,11 +65,31 @@ export async function GET(req: Request) {
     return Response.json({ source: "demo" as const, data: demoPayload(), requestId });
   }
 
-  try {
-    const supabase = await createServerSupabaseClient();
-    const from = new Date(Date.now() - rangeToMs(range)).toISOString();
+  const userId = await getAuthedUserId();
+  if (!userId) {
+    return Response.json({ error: "Unauthorized", requestId }, { status: 401 });
+  }
 
-    const { data: perfRows, error: perfError } = await supabase
+  try {
+    const userClient = await createServerSupabaseClient();
+    const { data: brandRow } = await userClient
+      .from("brands")
+      .select("id, name")
+      .eq("id", brandId)
+      .maybeSingle();
+
+    if (!brandRow) {
+      console.warn("[llm-visibility] brand not visible to user", { brandId, userId });
+      return Response.json({ error: "Brand not found", requestId }, { status: 404 });
+    }
+
+    const admin = tryCreateAdminSupabaseClient();
+    const db = admin ?? userClient;
+
+    const from = new Date(Date.now() - rangeToMs(range)).toISOString();
+    console.log("[llm-visibility] query", { brandId, range, from, usingAdmin: Boolean(admin) });
+
+    const { data: perfRows, error: perfError } = await db
       .from("llm_brand_performance")
       .select("platform_id, visibility_score, sentiment, measured_at, prompt_id, is_mentioned")
       .eq("brand_id", brandId)
@@ -79,6 +101,8 @@ export async function GET(req: Request) {
     }
 
     const rows = perfRows ?? [];
+    console.log("[llm-visibility] rows returned:", rows.length);
+
     if (rows.length === 0) {
       const empty: LlmVisibilityPayload = {
         empty: true,
@@ -92,7 +116,7 @@ export async function GET(req: Request) {
     }
 
     const platformIds = [...new Set(rows.map((r) => r.platform_id).filter(Boolean))] as string[];
-    const { data: platRows } = await supabase
+    const { data: platRows } = await db
       .from("llm_platforms")
       .select("id, name, display_name")
       .in("id", platformIds);
@@ -153,7 +177,7 @@ export async function GET(req: Request) {
     const promptIds = [...new Set(rows.map((r) => r.prompt_id).filter(Boolean))] as string[];
     const promptText = new Map<string, string>();
     if (promptIds.length) {
-      const { data: prompts } = await supabase.from("prompts").select("id, text").in("id", promptIds);
+      const { data: prompts } = await db.from("prompts").select("id, text").in("id", promptIds);
       for (const p of prompts ?? []) {
         promptText.set(p.id as string, p.text as string);
       }
