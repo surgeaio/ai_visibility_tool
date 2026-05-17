@@ -23,7 +23,14 @@ Reset or recreate anytime: `npm run seed:test-user`
 
 Google sign-in: see [GOOGLE_OAUTH_SETUP.md](GOOGLE_OAUTH_SETUP.md).
 
-**Intelligence phase:** set `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (and optional `GOOGLE_AI_API_KEY`, `PERPLEXITY_API_KEY`) for real model calls. Use `STRICT_LLM_EXECUTION=true` in production to forbid synthetic LLM placeholder text when a key is missing. Run **`npm run dev:full`** for Next.js + BullMQ workers + scheduler (requires `REDIS_URL`).
+**Intelligence phase:** set `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` (and optional `GOOGLE_AI_API_KEY`, `PERPLEXITY_API_KEY`) in Vercel and Railway — these are **shared admin keys** for all users (no per-user API key setup). Use `STRICT_LLM_EXECUTION=true` in production to forbid synthetic LLM placeholder text when a key is missing. Run **`npm run dev:full`** for Next.js + BullMQ workers + scheduler (optional `REDIS_URL`; without Redis, prompt runs execute synchronously in the API).
+
+## Running prompts
+
+- **Inline:** `/dashboard/llm-visibility` → **Run prompts now** (batch modal; uses selected brand).
+- **Full management:** `/dashboard/prompts` → add prompts and **Run** per row.
+- **Health:** `GET /api/health` — confirm `checks.can_run_prompts` and `checks.execution_mode` (`async` or `sync`).
+- See [PRODUCTION_ENV_SETUP.md](PRODUCTION_ENV_SETUP.md) for the full env table.
 
 ## Scripts
 

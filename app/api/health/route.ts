@@ -1,12 +1,14 @@
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
+import { adminHasLlmProviders } from "@/lib/ai/admin-providers";
 import { getEnv } from "@/lib/env";
-import { pingRedis } from "@/lib/redis/client";
+import { isRedisAvailable, pingRedis } from "@/lib/redis/client";
 
 function checkEnv(): boolean {
   return Boolean(
     process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim(),
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() &&
+      process.env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
   );
 }
 
@@ -44,14 +46,32 @@ export async function GET() {
   const supabaseOk = await checkSupabase();
   const redisRestOk = await checkRedisRest();
   const redisTcpOk = await pingRedis();
+  const redisConfigured = isRedisAvailable();
+  const redisConnected = redisRestOk || redisTcpOk;
+
+  const providers = {
+    openai: Boolean(process.env.OPENAI_API_KEY?.trim()),
+    anthropic: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+    google: Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
+    perplexity: Boolean(process.env.PERPLEXITY_API_KEY?.trim()),
+    serper: Boolean(process.env.SERPER_API_KEY?.trim()),
+  };
+
+  const canRunPrompts = adminHasLlmProviders();
+  const executionMode = redisConfigured && redisConnected ? "async" : "sync";
 
   const checks = {
     env: envOk,
     supabase: supabaseOk,
-    redis: redisRestOk || redisTcpOk,
+    redis: redisConnected,
+    redis_configured: redisConfigured,
+    execution_mode: executionMode,
+    providers,
+    can_run_prompts: canRunPrompts,
   };
 
-  const status = envOk && supabaseOk ? (checks.redis ? "ok" : "degraded") : "degraded";
+  const status =
+    envOk && supabaseOk && canRunPrompts ? (redisConnected ? "ok" : "degraded") : "degraded";
 
   return NextResponse.json({
     status,

@@ -28,17 +28,30 @@ Set these in **Vercel** (web + API) and **Railway** (workers). Never commit real
 
 **Common mistake:** Do not put the TCP `rediss://` URL into `UPSTASH_REDIS_REST_URL`.
 
-## AI providers
+## AI providers (shared admin keys — required for prompt runs)
 
-| Variable | Where to get | Format | Vercel | Railway | Example (redacted) |
-|----------|--------------|--------|--------|---------|-------------------|
-| `OPENAI_API_KEY` | platform.openai.com | `sk-...` | Yes | Yes | `sk-proj-***` |
-| `ANTHROPIC_API_KEY` | console.anthropic.com | `sk-ant-...` | Yes | Yes | `sk-ant-***` |
-| `GOOGLE_AI_API_KEY` | Google AI Studio | `AIza...` | Yes | Yes | `AIza***` |
-| `PERPLEXITY_API_KEY` | perplexity.ai (optional) | `pplx-...` | Optional | Optional | `pplx-***` |
-| `SERPER_API_KEY` | serper.dev | Hex/string | Yes | Optional | `***` |
-| `AI_DAILY_BUDGET_USD` | App setting | Number | Optional | Optional | `50` |
-| `STRICT_LLM_EXECUTION` | App setting | `true` / `false` | Optional | Optional | `false` |
+All users share these keys. Set **at least one** LLM provider on **Vercel and Railway**. No per-user API key setup is required.
+
+| Variable | Required | Purpose | Vercel | Railway |
+|----------|----------|---------|--------|---------|
+| `OPENAI_API_KEY` | At least one LLM | OpenAI / ChatGPT runs | Yes | Yes |
+| `ANTHROPIC_API_KEY` | At least one LLM | Claude runs | Yes | Yes |
+| `GOOGLE_AI_API_KEY` | At least one LLM | Gemini runs | Yes | Yes |
+| `PERPLEXITY_API_KEY` | Optional | Perplexity runs | Optional | Optional |
+| `SERPER_API_KEY` | Recommended | Google rankings + Serper | Yes | Optional |
+| `AI_DAILY_BUDGET_USD` | Optional | Spend cap | Optional | Optional |
+| `STRICT_LLM_EXECUTION` | Optional | Forbid demo LLM text when keys missing | Optional | Optional |
+
+### How prompts run
+
+1. User clicks **Run prompts now** on `/dashboard/llm-visibility` or **Run** on `/dashboard/prompts`.
+2. API checks that at least one of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GOOGLE_AI_API_KEY`, or `PERPLEXITY_API_KEY` is set.
+3. If `REDIS_URL` (or `UPSTASH_REDIS_URL`) is set and reachable → job is queued to BullMQ → Railway worker processes it.
+4. If Redis is not configured or enqueue fails → API runs **synchronously** (slower, works on Vercel-only).
+5. Results are stored in `llm_brand_performance`.
+6. `/dashboard/llm-visibility` reads that table for the **selected brand** (prompts must use the same `brandId`).
+
+Verify after deploy: `GET /api/health` → `checks.can_run_prompts: true`, `checks.execution_mode: "async"` or `"sync"`.
 
 ## Google OAuth (Search Console — not Supabase login)
 
