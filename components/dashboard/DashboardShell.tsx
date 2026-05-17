@@ -37,6 +37,7 @@ import { useDashboardStore } from "@/store/dashboard";
 import { ClientSelector } from "@/components/layout/ClientSelector";
 import { useSelectedBrand } from "@/lib/context/brand-context";
 import { DEMO_RECOMMENDATIONS } from "@/lib/demo/seed-data";
+import { LogoutButton } from "@/components/dashboard/LogoutButton";
 
 const TITLE_MAP: Record<string, string> = {
   "/dashboard": "Overview",
@@ -175,6 +176,7 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
             </Badge>
           </div>
         </div>
+        <LogoutButton className="mt-3 w-full justify-start text-neutral-400 hover:text-white" />
       </div>
     </div>
   );
