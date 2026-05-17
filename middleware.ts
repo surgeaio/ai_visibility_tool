@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { isAuthBypassMode } from "@/lib/config";
+import { logMiddlewareError } from "@/lib/middleware/log";
 import { refreshSupabaseSession } from "@/lib/supabase/middleware";
 
 /** Paths under /api that skip auth (webhooks verify signatures in-route; health for probes). */
@@ -50,7 +51,12 @@ export async function middleware(request: NextRequest) {
     const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
     const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
     if (!supabaseUrl || !supabaseAnonKey) {
-      console.error("[middleware] Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY");
+      console.error("[middleware]", {
+        path: pathname,
+        message: "Missing NEXT_PUBLIC_SUPABASE_URL or NEXT_PUBLIC_SUPABASE_ANON_KEY",
+        supabaseUrlSet: false,
+        anonKeySet: false,
+      });
       if (pathname.startsWith("/dashboard")) {
         return attachRequestId(NextResponse.redirect(new URL("/login", request.url)));
       }
@@ -63,7 +69,7 @@ export async function middleware(request: NextRequest) {
       return attachRequestId(NextResponse.next({ request }));
     }
 
-    const { response, user } = await refreshSupabaseSession(request);
+    const { response, user } = await refreshSupabaseSession(request, pathname);
 
     if (isPublicAppPath(pathname)) {
       return attachRequestId(response);
@@ -99,7 +105,7 @@ export async function middleware(request: NextRequest) {
 
     return attachRequestId(response);
   } catch (e) {
-    console.error("[middleware] Unhandled error:", e);
+    logMiddlewareError(request.nextUrl.pathname, e);
     return NextResponse.next();
   }
 }
