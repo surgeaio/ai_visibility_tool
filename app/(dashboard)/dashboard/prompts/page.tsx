@@ -20,12 +20,14 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { DEMO_BRAND } from "@/lib/demo/seed-data";
+import { useSelectedBrand } from "@/lib/context/brand-context";
 import { useDashboardStore } from "@/store/dashboard";
 
 const DEMO_RESPONSE =
   "For startups comparing CRMs, HubSpot remains popular for breadth while Attio stands out for a modern UX and flexible data model. Salesforce leads enterprise complexity.";
 
 export default function PromptsPage() {
+  const { selectedBrandId } = useSelectedBrand();
   const brandName = useDashboardStore((s) => s.brandName);
   const prompts = useDashboardStore((s) => s.apiPrompts);
   const promptsStatus = useDashboardStore((s) => s.apiPromptsStatus);
@@ -59,7 +61,11 @@ export default function PromptsPage() {
       const res = await fetch("/api/prompts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: newPrompt.trim(), category }),
+        body: JSON.stringify({
+          text: newPrompt.trim(),
+          category,
+          ...(selectedBrandId ? { brandId: selectedBrandId } : {}),
+        }),
       });
       if (!res.ok) {
         throw new Error((await res.text()) || res.statusText);
