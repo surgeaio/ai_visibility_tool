@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import type { User } from "@supabase/supabase-js";
 import { type NextRequest, NextResponse } from "next/server";
+import { logMiddlewareError } from "@/lib/middleware/log";
 
 type MiddlewareSupabaseResult = {
   response: NextResponse;
@@ -11,7 +12,10 @@ type MiddlewareSupabaseResult = {
  * Refreshes the Supabase session from cookies and returns a NextResponse that must be used
  * when the user is allowed to continue (so Set-Cookie from refresh is preserved).
  */
-export async function refreshSupabaseSession(request: NextRequest): Promise<MiddlewareSupabaseResult> {
+export async function refreshSupabaseSession(
+  request: NextRequest,
+  pathname = request.nextUrl.pathname,
+): Promise<MiddlewareSupabaseResult> {
   let response = NextResponse.next({ request });
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -47,13 +51,18 @@ export async function refreshSupabaseSession(request: NextRequest): Promise<Midd
     } = await supabase.auth.getUser();
 
     if (error) {
-      console.warn("[middleware] Supabase getUser:", error.message);
+      console.warn("[middleware]", {
+        path: pathname,
+        message: `Supabase getUser: ${error.message}`,
+        supabaseUrlSet: true,
+        anonKeySet: true,
+      });
       return { response, user: null };
     }
 
     return { response, user };
   } catch (e) {
-    console.error("[middleware] refreshSupabaseSession failed:", e);
+    logMiddlewareError(pathname, e, { phase: "refreshSupabaseSession" });
     return { response: NextResponse.next({ request }), user: null };
   }
 }
