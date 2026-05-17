@@ -24,6 +24,16 @@ export interface CrawledPage {
   issues: CrawlIssue[];
 }
 
+/** Puppeteer cannot launch on Vercel/AWS Lambda — use fetch + cheerio only. */
+export function isServerlessCrawlEnvironment(): boolean {
+  return Boolean(
+    process.env.VERCEL ||
+      process.env.NOW_REGION ||
+      process.env.AWS_LAMBDA_FUNCTION_NAME ||
+      process.env.VERCEL_ENV,
+  );
+}
+
 function normalizeInternalUrl(origin: string, pathname: string): string {
   try {
     const u = new URL(pathname, origin);
@@ -62,7 +72,7 @@ function analyzeHtml(url: string, html: string, loadTimeMs: number): CrawledPage
   const robotsMeta = $('meta[name="robots"]').attr("content")?.trim() ?? null;
   const h1Count = $("h1").length;
   const bodyText = $("body").text().replace(/\s+/g, " ").trim();
-  const wordCount = bodyText ? bodyText.split(" ").length : 0;
+  const wordCount = bodyText ? bodyText.split(/\s+/).filter(Boolean).length : 0;
   let host: string;
   try {
     host = new URL(url).hostname;
@@ -139,10 +149,98 @@ function analyzeHtml(url: string, html: string, loadTimeMs: number): CrawledPage
   };
 }
 
+/** Fetch-based crawl — works on Vercel serverless (no Chrome). */
+export async function crawlSiteWithFetch(startUrl: string, maxPages: number): Promise<CrawledPage[]> {
+  const cap = Math.min(Math.max(1, maxPages), 100);
+  const origin = new URL(startUrl).origin;
+  const visited = new Set<string>();
+  const queue: string[] = [startUrl];
+  const results: CrawledPage[] = [];
+
+  while (queue.length > 0 && results.length < cap) {
+    const next = queue.shift()!;
+    if (visited.has(next)) continue;
+    visited.add(next);
+
+    const started = Date.now();
+    try {
+      const res = await fetch(next, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; AIVisibilityBot/1.0)" },
+        signal: AbortSignal.timeout(12_000),
+        redirect: "follow",
+      });
+
+      if (!res.ok) {
+        results.push({
+          url: next,
+          title: null,
+          titleLength: 0,
+          metaDescription: null,
+          metaDescriptionLength: 0,
+          canonicalUrl: null,
+          robotsMeta: null,
+          h1Count: 0,
+          wordCount: 0,
+          internalLinks: 0,
+          externalLinks: 0,
+          images: 0,
+          imagesWithoutAlt: 0,
+          hasSchema: false,
+          schemaTypes: [],
+          hasFaqSchema: false,
+          loadTimeMs: Date.now() - started,
+          issues: [{ severity: "critical", type: `http_${res.status}` }],
+        });
+        continue;
+      }
+
+      const html = await res.text();
+      const page = analyzeHtml(next, html, Date.now() - started);
+      results.push(page);
+
+      for (const link of extractInternalLinks(html, next)) {
+        if (!visited.has(link) && !queue.includes(link) && visited.size + queue.length < cap * 2) {
+          queue.push(link);
+        }
+      }
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      console.error("[crawl-fetch] failed", next, msg);
+      results.push({
+        url: next,
+        title: null,
+        titleLength: 0,
+        metaDescription: null,
+        metaDescriptionLength: 0,
+        canonicalUrl: null,
+        robotsMeta: null,
+        h1Count: 0,
+        wordCount: 0,
+        internalLinks: 0,
+        externalLinks: 0,
+        images: 0,
+        imagesWithoutAlt: 0,
+        hasSchema: false,
+        schemaTypes: [],
+        hasFaqSchema: false,
+        loadTimeMs: Date.now() - started,
+        issues: [{ severity: "critical", type: "fetch_failed" }],
+      });
+    }
+  }
+
+  if (results.length === 0) {
+    throw new Error(`Could not crawl any pages from ${origin}. Check the URL is reachable.`);
+  }
+
+  return results;
+}
+
 export class WebsiteCrawler {
   private browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
 
   async initialize(): Promise<void> {
+    if (isServerlessCrawlEnvironment()) return;
     if (this.browser) return;
     this.browser = await puppeteer.launch({
       headless: true,
@@ -158,6 +256,10 @@ export class WebsiteCrawler {
   }
 
   async crawlPage(url: string): Promise<CrawledPage> {
+    if (isServerlessCrawlEnvironment()) {
+      const pages = await crawlSiteWithFetch(url, 1);
+      return pages[0]!;
+    }
     await this.initialize();
     const page = await this.browser!.newPage();
     const started = Date.now();
@@ -172,6 +274,11 @@ export class WebsiteCrawler {
   }
 
   async crawlSite(startUrl: string, maxPages: number): Promise<CrawledPage[]> {
+    if (isServerlessCrawlEnvironment()) {
+      console.log("[crawl] using fetch-only mode (serverless)");
+      return crawlSiteWithFetch(startUrl, maxPages);
+    }
+
     const visited = new Set<string>();
     const queue: string[] = [startUrl];
     const results: CrawledPage[] = [];

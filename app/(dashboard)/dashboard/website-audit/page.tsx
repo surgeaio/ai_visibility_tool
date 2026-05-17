@@ -94,8 +94,12 @@ export default function WebsiteAuditPage() {
         mode?: string;
         note?: string;
         error?: string;
+        details?: string;
       };
-      if (!res.ok) throw new Error(json.error ?? "Failed to start crawl");
+      if (!res.ok) {
+        const msg = json.error ?? json.details ?? "Failed to start crawl";
+        throw new Error(msg);
+      }
       if (json.status === "queued") {
         toast.success("Crawl queued. Results appear after the worker finishes.");
       } else if (json.status === "completed") {
