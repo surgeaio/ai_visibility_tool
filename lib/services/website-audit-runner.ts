@@ -9,17 +9,62 @@ export type WebsiteAuditRunResult = {
   warnings: number;
 };
 
+export function normalizeSiteUrl(raw: string): string {
+  let siteUrl = raw.trim();
+  if (!siteUrl) throw new Error("Website URL is empty");
+  if (!siteUrl.startsWith("http://") && !siteUrl.startsWith("https://")) {
+    siteUrl = `https://${siteUrl}`;
+  }
+  try {
+    new URL(siteUrl);
+  } catch {
+    throw new Error(`Invalid website URL: ${raw}`);
+  }
+  return siteUrl;
+}
+
 /** Run a full website crawl and persist audit rows (sync path — no BullMQ). */
 export async function runWebsiteAuditSync(params: {
   brandId: string;
   siteUrl: string;
   maxPages: number;
 }): Promise<WebsiteAuditRunResult> {
-  const { brandId, siteUrl, maxPages } = params;
+  const { brandId, maxPages } = params;
+  const siteUrl = normalizeSiteUrl(params.siteUrl);
+
+  const admin = tryCreateAdminSupabaseClient();
+  if (!admin) {
+    throw new Error(
+      "Server cannot save audit results (SUPABASE_SERVICE_ROLE_KEY missing). Configure it in Vercel.",
+    );
+  }
+
+  const { data: brand, error: brandError } = await admin
+    .from("brands")
+    .select("id, name, website")
+    .eq("id", brandId)
+    .maybeSingle();
+
+  if (brandError) throw new Error(`Brand lookup failed: ${brandError.message}`);
+  if (!brand) throw new Error(`Brand not found: ${brandId}`);
+
+  const effectiveUrl = siteUrl || (brand.website ? normalizeSiteUrl(brand.website) : null);
+  if (!effectiveUrl) {
+    throw new Error(
+      `Brand "${brand.name}" has no website set. Add a website URL in Supabase (brands.website) or brand settings.`,
+    );
+  }
+
+  console.log("[website-audit] crawl start", { brandId, siteUrl: effectiveUrl, maxPages });
+
   const crawler = new WebsiteCrawler();
   try {
-    await crawler.initialize();
-    const pages = await crawler.crawlSite(siteUrl, Math.min(Math.max(1, maxPages), 100));
+    const pages = await crawler.crawlSite(effectiveUrl, Math.min(Math.max(1, maxPages), 100));
+
+    if (!pages.length) {
+      throw new Error(`No pages could be crawled for ${effectiveUrl}`);
+    }
+
     const critical = pages.reduce(
       (a, p) => a + p.issues.filter((i) => i.severity === "critical").length,
       0,
@@ -32,11 +77,6 @@ export async function runWebsiteAuditSync(params: {
       pages.length > 0
         ? Math.max(0, Math.min(100, 100 - critical * 3 - Math.min(40, warnings)))
         : 0;
-
-    const admin = tryCreateAdminSupabaseClient();
-    if (!admin) {
-      return { auditId: null, pages: pages.length, overallScore: overall, critical, warnings };
-    }
 
     const { data: audit, error: aErr } = await admin
       .from("website_audits")
@@ -52,7 +92,7 @@ export async function runWebsiteAuditSync(params: {
       })
       .select("id")
       .single();
-    if (aErr) throw new Error(aErr.message);
+    if (aErr) throw new Error(`Failed to save audit: ${aErr.message}`);
     const auditId = audit.id as string;
 
     for (const p of pages) {
@@ -82,6 +122,7 @@ export async function runWebsiteAuditSync(params: {
       if (pErr) console.error("[website-audit] page insert", pErr.message);
     }
 
+    console.log("[website-audit] crawl done", { auditId, pages: pages.length });
     return { auditId, pages: pages.length, overallScore: overall, critical, warnings };
   } finally {
     await crawler.cleanup();

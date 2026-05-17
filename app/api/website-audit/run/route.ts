@@ -1,11 +1,10 @@
 import { z } from "zod";
 import { getAuthedUserId } from "@/lib/api/session";
-import { serverErrorResponse } from "@/lib/api/errors";
 import { getRequestId, validateBody } from "@/lib/api/validate";
 import { getWebsiteCrawlQueue } from "@/lib/queues/website-crawl.queue";
 import { isRedisAvailable } from "@/lib/redis/client";
 import { BrandsRepository } from "@/lib/repositories";
-import { runWebsiteAuditSync } from "@/lib/services/website-audit-runner";
+import { normalizeSiteUrl, runWebsiteAuditSync } from "@/lib/services/website-audit-runner";
 
 export const maxDuration = 60;
 
@@ -29,12 +28,24 @@ export async function POST(req: Request) {
 
   try {
     const brand = await brandsRepo.findById(parsed.data.brandId);
-    const siteUrl = parsed.data.siteUrl ?? brand?.website;
-    if (!siteUrl) {
-      return Response.json(
-        { error: "siteUrl required (or set brand website)", requestId },
-        { status: 400 },
-      );
+    if (!brand) {
+      return Response.json({ error: "Brand not found", requestId }, { status: 404 });
+    }
+
+    let siteUrl: string;
+    try {
+      siteUrl = parsed.data.siteUrl
+        ? normalizeSiteUrl(parsed.data.siteUrl)
+        : brand.website
+          ? normalizeSiteUrl(brand.website)
+          : (() => {
+              throw new Error(
+                `Brand "${brand.name}" has no website set. Add a website in brand settings or Supabase brands.website.`,
+              );
+            })();
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      return Response.json({ error: message, code: "INVALID_SITE_URL", requestId }, { status: 400 });
     }
 
     const { brandId, maxPages } = parsed.data;
@@ -57,29 +68,24 @@ export async function POST(req: Request) {
       }
     }
 
-    try {
-      const result = await runWebsiteAuditSync({ brandId, siteUrl, maxPages });
-      return Response.json({
-        status: "completed",
-        mode: "sync",
-        ...result,
-        requestId,
-      });
-    } catch (err) {
-      console.error("[website-audit] sync crawl failed:", err);
-      const message = err instanceof Error ? err.message : String(err);
-      return Response.json(
-        {
-          error: "Website audit failed",
-          code: "AUDIT_ERROR",
-          details: message,
-          requestId,
-        },
-        { status: 500 },
-      );
-    }
+    const result = await runWebsiteAuditSync({ brandId, siteUrl, maxPages });
+    return Response.json({
+      status: "completed",
+      mode: "sync",
+      ...result,
+      requestId,
+    });
   } catch (e) {
-    console.error(e);
-    return serverErrorResponse("Failed to enqueue crawl", requestId);
+    console.error("[website-audit] run failed:", e);
+    const message = e instanceof Error ? e.message : String(e);
+    return Response.json(
+      {
+        error: message,
+        code: "AUDIT_ERROR",
+        details: process.env.NODE_ENV === "development" ? message : undefined,
+        requestId,
+      },
+      { status: 500 },
+    );
   }
 }
