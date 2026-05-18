@@ -21,10 +21,26 @@ export interface IndexedPageSummary {
   issue: string | null;
 }
 
+async function withRetry<T>(fn: () => Promise<T>, label: string, attempts = 3): Promise<T> {
+  let last: unknown;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      return await fn();
+    } catch (e) {
+      last = e;
+      const delay = 1000 * (i + 1);
+      console.warn(`[gsc-api] ${label} attempt ${i + 1} failed, retry in ${delay}ms`, e);
+      if (i < attempts - 1) await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  throw last;
+}
+
 export class GoogleSearchConsoleService {
   constructor(private readonly auth: OAuth2Client) {}
 
   async listSites(): Promise<SiteSummary[]> {
+    return withRetry(async () => {
     const webmasters = google.webmasters({ version: "v3", auth: this.auth });
     const { data } = await webmasters.sites.list();
     return (
@@ -33,6 +49,7 @@ export class GoogleSearchConsoleService {
         permissionLevel: s.permissionLevel ?? "",
       })) ?? []
     ).filter((s) => s.siteUrl);
+    }, "sites.list");
   }
 
   async getSearchAnalytics(
@@ -44,25 +61,27 @@ export class GoogleSearchConsoleService {
       rowLimit?: number;
     },
   ): Promise<SearchAnalyticsRow[]> {
-    const webmasters = google.webmasters({ version: "v3", auth: this.auth });
-    const { data } = await webmasters.searchanalytics.query({
-      siteUrl,
-      requestBody: {
-        startDate: options.startDate,
-        endDate: options.endDate,
-        dimensions: options.dimensions,
-        rowLimit: options.rowLimit ?? 1000,
-      },
-    });
-    return (
-      data.rows?.map((row) => ({
-        keys: row.keys ?? [],
-        clicks: row.clicks ?? 0,
-        impressions: row.impressions ?? 0,
-        ctr: row.ctr ?? 0,
-        position: row.position ?? 0,
-      })) ?? []
-    );
+    return withRetry(async () => {
+      const webmasters = google.webmasters({ version: "v3", auth: this.auth });
+      const { data } = await webmasters.searchanalytics.query({
+        siteUrl,
+        requestBody: {
+          startDate: options.startDate,
+          endDate: options.endDate,
+          dimensions: options.dimensions,
+          rowLimit: options.rowLimit ?? 1000,
+        },
+      });
+      return (
+        data.rows?.map((row) => ({
+          keys: row.keys ?? [],
+          clicks: row.clicks ?? 0,
+          impressions: row.impressions ?? 0,
+          ctr: row.ctr ?? 0,
+          position: row.position ?? 0,
+        })) ?? []
+      );
+    }, `searchanalytics.${options.dimensions.join("+")}`);
   }
 
   /** URL Inspection at scale is quota-heavy; return [] until a dedicated indexer job is added. */

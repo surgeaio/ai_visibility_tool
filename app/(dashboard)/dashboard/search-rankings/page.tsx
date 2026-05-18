@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { runGscSyncForBrand } from "@/lib/client/gsc-sync";
 import { useSelectedBrand } from "@/lib/context/brand-context";
 
 type RankingRow = {
@@ -133,17 +134,11 @@ export default function SearchRankingsPage() {
             if (!selectedBrandId) return;
             setSyncBusy(true);
             try {
-              const res = await fetch("/api/gsc/sync", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ brandId: selectedBrandId }),
-              });
-              if (!res.ok) {
-                const j = (await res.json()) as { error?: string };
-                throw new Error(j.error ?? "Sync failed");
+              const result = await runGscSyncForBrand(selectedBrandId);
+              if (result.status === "completed") {
+                toast.success("Sync complete");
+                void load();
               }
-              toast.success("Sync complete");
-              void load();
             } catch (e) {
               toast.error(e instanceof Error ? e.message : "Sync failed");
             } finally {
