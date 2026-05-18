@@ -76,10 +76,13 @@ export function aggregateKeywords(rows: QueryRow[]): KeywordTableRow[] {
     map.set(r.query, cur);
   }
   return Array.from(map.values())
-    .map(({ bestUrl, bestClicks: _, ...k }) => ({
-      ...k,
-      url: bestUrl,
-      ctr: k.impressions > 0 ? k.clicks / k.impressions : 0,
+    .map((row) => ({
+      keyword: row.keyword,
+      clicks: row.clicks,
+      impressions: row.impressions,
+      position: row.position,
+      url: row.bestUrl,
+      ctr: row.impressions > 0 ? row.clicks / row.impressions : 0,
     }))
     .sort((a, b) => b.clicks - a.clicks);
 }
