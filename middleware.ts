@@ -7,6 +7,8 @@ import { refreshSupabaseSession } from "@/lib/supabase/middleware";
 function isPublicApiPath(pathname: string): boolean {
   return (
     pathname.startsWith("/api/auth") ||
+    pathname === "/api/auth/callback/google" ||
+    pathname === "/api/auth/google/callback" ||
     pathname.startsWith("/api/webhooks") ||
     pathname.startsWith("/api/health") ||
     pathname.startsWith("/api/cron")

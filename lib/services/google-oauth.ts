@@ -1,3 +1,4 @@
+import { getGoogleGscRedirectUri } from "@/lib/auth/google-oauth-config";
 import { google } from "googleapis";
 
 const GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
@@ -7,7 +8,7 @@ export class GoogleOAuthService {
   private getClient() {
     const clientId = process.env.GOOGLE_CLIENT_ID;
     const clientSecret = process.env.GOOGLE_CLIENT_SECRET;
-    const redirectUri = process.env.GOOGLE_REDIRECT_URI ?? `${process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"}/api/auth/google/callback`;
+    const redirectUri = getGoogleGscRedirectUri();
     if (!clientId?.trim() || !clientSecret?.trim()) {
       throw new Error("Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET");
     }

@@ -52,26 +52,52 @@ Use this runbook to fix **"Unsupported provider: provider is not enabled"** and 
 
 ---
 
-## Step D — Vercel / Railway env (Search Console OAuth — separate)
+## Step D — Google Cloud: Search Console OAuth client (separate from Supabase login)
 
-These env vars are for **Google Search Console** API (`/api/auth/google`), not Supabase login:
+Create a **second** OAuth client (or add redirect URIs to your Web client) for **Search Console** inside the dashboard:
+
+**Authorized redirect URIs (add both for safety):**
+
+```
+https://ai-visibility-tool-nu.vercel.app/api/auth/callback/google
+https://ai-visibility-tool-nu.vercel.app/api/auth/google/callback
+http://localhost:3000/api/auth/callback/google
+```
+
+Enable **Google Search Console API** for the project.
+
+**Vercel env (GSC only — not used for `/login`):**
 
 ```
 GOOGLE_CLIENT_ID=....apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-...
-GOOGLE_REDIRECT_URI=https://ai-visibility-tool-nu.vercel.app/api/auth/google/callback
+GOOGLE_REDIRECT_URI=https://ai-visibility-tool-nu.vercel.app/api/auth/callback/google
+ENCRYPTION_KEY=<64 hex chars>
 ```
 
-Supabase Google login uses Step B only (no `GOOGLE_CLIENT_ID` in app code for `/login` OAuth button).
+Supabase Google login (Step B) uses `https://jfunkoftnvbxkmlelkad.supabase.co/auth/v1/callback` — do **not** confuse with GSC redirect above.
+
+This app uses **custom OAuth** (not NextAuth). Routes:
+
+- Start: `GET /api/auth/google?brandId=...`
+- Callback: `GET /api/auth/callback/google`
 
 ---
 
-## Step E — Test
+## Step E — Test Supabase login
 
 1. Open `https://ai-visibility-tool-nu.vercel.app/login`
 2. Click **Continue with Google**
 3. Google consent screen → approve
 4. Redirect to `/auth/callback` → `/dashboard`
+
+## Step F — Test Search Console connect
+
+1. Log in → **Google Rankings** (or **Search Rankings**)
+2. Click **Connect Search Console**
+3. Approve permissions
+4. Redirect to `/dashboard/google-rankings?connected=true`
+5. Click **Re-sync now** if metrics are empty
 
 ---
 
@@ -83,6 +109,9 @@ Supabase Google login uses Step B only (no `GOOGLE_CLIENT_ID` in app code for `/
 | **redirect_uri_mismatch** | Redirect URI must be exactly `https://jfunkoftnvbxkmlelkad.supabase.co/auth/v1/callback` in Google Console |
 | **Site URL mismatch** | Set Site URL in **Step C** |
 | Lands on `/login?error=...` | Check Supabase Auth logs; confirm redirect URLs include `/auth/callback` |
+| **404 on `/api/auth/callback/google`** | Deploy latest code; route must exist (`app/api/auth/callback/google/route.ts`) |
+| **redirect_mismatch / 400 malformed** | `GOOGLE_REDIRECT_URI` must exactly match Google Console + auth URL |
+| **oauth_failed after approve** | Check Vercel logs `[gsc-oauth-callback]`; verify `ENCRYPTION_KEY` and DB migration |
 
 ---
 
