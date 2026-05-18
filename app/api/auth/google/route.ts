@@ -1,5 +1,8 @@
+import { getGoogleGscRedirectUri } from "@/lib/auth/google-oauth-config";
 import { GoogleOAuthService } from "@/lib/services/google-oauth";
 import { NextRequest, NextResponse } from "next/server";
+
+export const runtime = "nodejs";
 
 export async function GET(req: NextRequest) {
   const brandId = req.nextUrl.searchParams.get("brandId");
@@ -10,9 +13,12 @@ export async function GET(req: NextRequest) {
   try {
     const state = Buffer.from(JSON.stringify({ brandId }), "utf8").toString("base64url");
     authUrl = new GoogleOAuthService().getAuthUrl(state);
-  } catch {
+    console.info("[gsc-oauth-start]", { brandId, redirectUri: getGoogleGscRedirectUri() });
+  } catch (e) {
+    const message = e instanceof Error ? e.message : "Google OAuth is not configured";
+    console.error("[gsc-oauth-start]", message);
     return NextResponse.json(
-      { error: "Google OAuth is not configured (missing client id/secret)." },
+      { error: "Google OAuth is not configured (missing client id/secret).", details: message },
       { status: 503 },
     );
   }

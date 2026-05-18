@@ -59,7 +59,7 @@ Verify after deploy: `GET /api/health` → `checks.can_run_prompts: true`, `chec
 |----------|--------------|--------|--------|---------|-------------------|
 | `GOOGLE_CLIENT_ID` | Google Cloud Console → Credentials | `*.apps.googleusercontent.com` | Yes | Optional | `***.apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET` | Same | `GOCSPX-...` | Yes | Optional | `GOCSPX-***` |
-| `GOOGLE_REDIRECT_URI` | Must match OAuth client | Full HTTPS URL | Yes | Optional | `https://ai-visibility-tool-nu.vercel.app/api/auth/google/callback` |
+| `GOOGLE_REDIRECT_URI` | Must match OAuth client exactly | Full HTTPS URL | Yes | Optional | `https://ai-visibility-tool-nu.vercel.app/api/auth/callback/google` |
 
 ## Security
 
