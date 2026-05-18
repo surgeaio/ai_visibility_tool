@@ -1,6 +1,7 @@
 import type IORedis from "ioredis";
 import { createBullMQConnection } from "@/lib/redis/client";
 import { registerCitationWorker } from "./citation.worker";
+import { registerGscSyncWorker } from "./gsc-sync.worker";
 import { registerSerperRankingWorker } from "./serper-ranking.worker";
 import { registerWebsiteCrawlWorker } from "./crawl.worker";
 import { registerPromptExecutionWorker } from "./prompt.worker";
@@ -47,6 +48,7 @@ async function main() {
     registerTrendWorker(await dup(base)),
     registerWebsiteCrawlWorker(await dup(base)),
     registerSerperRankingWorker(await dup(base)),
+    registerGscSyncWorker(await dup(base)),
   ];
 
   console.log("[workers] BullMQ workers running (scheduler: hourly prompt schedules, daily GSC sync).");

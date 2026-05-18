@@ -1,5 +1,6 @@
 import { encryptApiKey } from "@/lib/crypto/encryption";
 import { getAppBaseUrl } from "@/lib/auth/google-oauth-config";
+import { getGscSyncQueue } from "@/lib/queues/gsc-sync.queue";
 import { GoogleOAuthService } from "@/lib/services/google-oauth";
 import { GoogleSearchConsoleService } from "@/lib/services/google-search-console";
 import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -139,16 +140,25 @@ export async function handleGoogleGscOAuthCallback(req: NextRequest): Promise<Ne
 
     console.info("[gsc-oauth-callback] connected", { userId: user.id, brandId, siteUrl });
 
-    const cronSecret = process.env.CRON_SECRET?.trim();
-    if (cronSecret) {
-      void fetch(`${base}/api/gsc/sync`, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${cronSecret}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ brandId }),
-      }).catch((err) => console.error("[gsc-oauth-callback] initial sync trigger failed:", err));
+    const { data: connRow } = await db
+      .from("gsc_connections")
+      .select("id")
+      .eq("user_id", user.id)
+      .eq("brand_id", brandId)
+      .eq("site_url", siteUrl)
+      .maybeSingle();
+
+    const queue = getGscSyncQueue();
+    if (queue && connRow?.id) {
+      void queue
+        .add(
+          "gsc-sync",
+          { brandId, userId: user.id, connectionId: connRow.id, daysBack: 28 },
+          { attempts: 2, removeOnComplete: 500 },
+        )
+        .catch((err) => console.error("[gsc-oauth-callback] queue sync failed:", err));
+    } else if (!queue) {
+      console.warn("[gsc-oauth-callback] Redis queue unavailable — run sync manually from dashboard");
     }
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);

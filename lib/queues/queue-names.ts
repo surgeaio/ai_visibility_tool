@@ -7,6 +7,7 @@ export const TREND_ANALYSIS_QUEUE_NAME = "trend-analysis";
 
 export const WEBSITE_CRAWL_QUEUE_NAME = "website-crawl";
 export const SERPER_RANKING_QUEUE_NAME = "serper-ranking";
+export const GSC_SYNC_QUEUE_NAME = "gsc-sync";
 export const PLATFORM_SCHEDULER_QUEUE_NAME = "platform-scheduler";
 
 export const BULL_QUEUE_NAMES = [
@@ -17,5 +18,6 @@ export const BULL_QUEUE_NAMES = [
   TREND_ANALYSIS_QUEUE_NAME,
   WEBSITE_CRAWL_QUEUE_NAME,
   SERPER_RANKING_QUEUE_NAME,
+  GSC_SYNC_QUEUE_NAME,
   PLATFORM_SCHEDULER_QUEUE_NAME,
 ] as const;

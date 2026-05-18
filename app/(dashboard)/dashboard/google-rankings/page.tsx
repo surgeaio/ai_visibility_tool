@@ -7,6 +7,7 @@ import { RankPositionChart } from "@/components/charts/RankPositionChart";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { runGscSyncForBrand } from "@/lib/client/gsc-sync";
 import { useSelectedBrand } from "@/lib/context/brand-context";
 import { useDashboardStore } from "@/store/dashboard";
 
@@ -82,18 +83,19 @@ export default function GoogleRankingsPage() {
     setSyncBusy(true);
     const tid = toast.loading("Syncing Search Console data…");
     try {
-      const res = await fetch("/api/gsc/sync", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ brandId: selectedBrandId }),
-      });
-      const json = (await res.json()) as { error?: string; results?: { status: string }[] };
+      const result = await runGscSyncForBrand(selectedBrandId);
       toast.dismiss(tid);
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-      const failed = json.results?.filter((r) => r.status === "failed").length ?? 0;
-      if (failed > 0) toast.warning("Sync completed with some errors.");
-      else toast.success("Search Console sync complete.");
-      void load();
+      if (result.status === "completed") {
+        const failed = result.results.filter((r) => r.status === "failed").length;
+        const ok = result.results[0];
+        if (failed > 0) toast.warning("Sync completed with some errors.");
+        else {
+          toast.success(
+            `Sync complete — ${ok?.dailyRows ?? 0} daily rows, ${ok?.queryRows ?? 0} query rows.`,
+          );
+        }
+        void load();
+      }
     } catch (e) {
       toast.dismiss(tid);
       toast.error(e instanceof Error ? e.message : "Sync failed");

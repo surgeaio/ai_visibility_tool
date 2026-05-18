@@ -60,6 +60,8 @@ Verify after deploy: `GET /api/health` → `checks.can_run_prompts: true`, `chec
 | `GOOGLE_CLIENT_ID` | Google Cloud Console → Credentials | `*.apps.googleusercontent.com` | Yes | Optional | `***.apps.googleusercontent.com` |
 | `GOOGLE_CLIENT_SECRET` | Same | `GOCSPX-...` | Yes | Optional | `GOCSPX-***` |
 | `GOOGLE_REDIRECT_URI` | Must match OAuth client exactly | Full HTTPS URL | Yes | Optional | `https://ai-visibility-tool-nu.vercel.app/api/auth/callback/google` |
+| `REDIS_URL` | BullMQ workers (GSC sync, prompts) | `rediss://...` Upstash TCP | Yes (Railway) | Yes (Vercel enqueue) | Required for background GSC sync — without it, manual sync may timeout on Vercel |
+| `SUPABASE_SERVICE_ROLE_KEY` | GSC sync worker writes | service_role JWT | Yes (Railway) | No | Workers bypass RLS for batch upserts |
 
 ## Security
 
