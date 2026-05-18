@@ -13,6 +13,7 @@ import {
   Heart,
   LayoutDashboard,
   Lightbulb,
+  ListOrdered,
   Link as LinkIcon,
   Menu,
   MessageSquare,
@@ -52,6 +53,7 @@ const TITLE_MAP: Record<string, string> = {
   "/dashboard/brands/new": "Add client",
   "/dashboard/llm-visibility": "LLM Visibility",
   "/dashboard/google-rankings": "Google Rankings",
+  "/dashboard/search-rankings": "Search Rankings",
   "/dashboard/analytics": "Analytics",
   "/dashboard/website-audit": "Website Audit",
   "/dashboard/brand-audit": "Brand Audit",
@@ -62,6 +64,7 @@ function resolvePageTitle(pathname: string): string {
   if (pathname.startsWith("/dashboard/llm-visibility/")) return "LLM prompt detail";
   if (pathname.startsWith("/dashboard/llm-visibility")) return "LLM Visibility";
   if (pathname.startsWith("/dashboard/google-rankings/")) return "Keyword detail";
+  if (pathname.startsWith("/dashboard/search-rankings")) return "Search Rankings";
   if (pathname.startsWith("/dashboard/google-rankings")) return "Google Rankings";
   if (pathname.startsWith("/dashboard/competitors/")) return "Competitor detail";
   if (pathname.startsWith("/dashboard/website-audit/non-indexed")) return "Non-indexed pages";
@@ -83,6 +86,7 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/dashboard/llm-visibility", label: "LLM Visibility", icon: Bot, match: "prefix" },
       { href: "/dashboard/google-rankings", label: "Google Rankings", icon: Search, match: "prefix" },
+      { href: "/dashboard/search-rankings", label: "Search Rankings", icon: ListOrdered, match: "prefix" },
       { href: "/dashboard/competitors", label: "Competitors", icon: Users, match: "prefix" },
       { href: "/dashboard/analytics", label: "3-layer analytics", icon: BarChart3, match: "prefix" },
     ],
