@@ -1,1 +1,8 @@
-{}
+{
+  "crons": [
+    {
+      "path": "/api/cron/gsc-sync",
+      "schedule": "0 6 * * *"
+    }
+  ]
+}
