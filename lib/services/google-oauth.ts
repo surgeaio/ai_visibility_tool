@@ -1,6 +1,7 @@
 import { google } from "googleapis";
 
 const GSC_SCOPE = "https://www.googleapis.com/auth/webmasters.readonly";
+const EMAIL_SCOPE = "https://www.googleapis.com/auth/userinfo.email";
 
 export class GoogleOAuthService {
   private getClient() {
@@ -17,7 +18,7 @@ export class GoogleOAuthService {
     const oauth2 = this.getClient();
     return oauth2.generateAuthUrl({
       access_type: "offline",
-      scope: [GSC_SCOPE],
+      scope: [GSC_SCOPE, EMAIL_SCOPE, "openid"],
       state,
       prompt: "consent",
     });
