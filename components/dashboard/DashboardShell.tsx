@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  BarChart3,
   BookOpen,
   Bot,
   FileSearch,
@@ -51,7 +50,6 @@ const TITLE_MAP: Record<string, string> = {
   "/dashboard/llm-visibility": "LLM Visibility",
   "/dashboard/google-rankings": "Google Rankings",
   "/dashboard/search-rankings": "Search Rankings",
-  "/dashboard/analytics": "Analytics",
   "/dashboard/website-audit": "Website Audit",
   "/dashboard/website-audit/non-indexed": "Non-indexed pages",
 };
@@ -83,7 +81,6 @@ const NAV_SECTIONS: NavSection[] = [
       { href: "/dashboard/google-rankings", label: "Google Rankings", icon: Search, match: "prefix" },
       { href: "/dashboard/search-rankings", label: "Search Rankings", icon: ListOrdered, match: "prefix" },
       { href: "/dashboard/competitors", label: "Competitors", icon: Users, match: "prefix" },
-      { href: "/dashboard/analytics", label: "3-layer analytics", icon: BarChart3, match: "prefix" },
     ],
   },
   {
