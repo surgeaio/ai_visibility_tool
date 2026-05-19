@@ -4,12 +4,10 @@ import type { ReactNode } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
-  Activity,
   BarChart3,
   BookOpen,
   Bot,
   FileSearch,
-  ShieldCheck,
   Heart,
   LayoutDashboard,
   Lightbulb,
@@ -48,7 +46,6 @@ const TITLE_MAP: Record<string, string> = {
   "/dashboard/sources": "Sources",
   "/dashboard/citations": "Citations",
   "/dashboard/recommendations": "Recommendations",
-  "/dashboard/jobs": "Jobs",
   "/dashboard/settings": "Profile & workspace",
   "/dashboard/brands/new": "Add client",
   "/dashboard/llm-visibility": "LLM Visibility",
@@ -56,7 +53,6 @@ const TITLE_MAP: Record<string, string> = {
   "/dashboard/search-rankings": "Search Rankings",
   "/dashboard/analytics": "Analytics",
   "/dashboard/website-audit": "Website Audit",
-  "/dashboard/brand-audit": "Brand Audit",
   "/dashboard/website-audit/non-indexed": "Non-indexed pages",
 };
 
@@ -74,7 +70,7 @@ function resolvePageTitle(pathname: string): string {
 
 type NavItem = { href: string; label: string; icon: LucideIcon; badge?: number; match?: "exact" | "prefix" };
 
-type NavSection = { label: string; items: NavItem[] };
+type NavSection = { label?: string; items: NavItem[] };
 
 const NAV_SECTIONS: NavSection[] = [
   {
@@ -82,7 +78,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [{ href: "/dashboard", label: "Overview", icon: LayoutDashboard, match: "exact" }],
   },
   {
-    label: "Analytics",
     items: [
       { href: "/dashboard/llm-visibility", label: "LLM Visibility", icon: Bot, match: "prefix" },
       { href: "/dashboard/google-rankings", label: "Google Rankings", icon: Search, match: "prefix" },
@@ -96,7 +91,6 @@ const NAV_SECTIONS: NavSection[] = [
     items: [
       { href: "/dashboard/prompts", label: "Prompts", icon: MessageSquare, match: "prefix" },
       { href: "/dashboard/website-audit", label: "Website audit", icon: FileSearch, match: "prefix" },
-      { href: "/dashboard/brand-audit", label: "Brand Audit", icon: ShieldCheck, match: "prefix" },
       {
         href: "/dashboard/recommendations",
         label: "Recommendations",
@@ -104,7 +98,6 @@ const NAV_SECTIONS: NavSection[] = [
         match: "prefix",
         badge: DEMO_RECOMMENDATIONS.filter((r) => r.status === "pending").length,
       },
-      { href: "/dashboard/jobs", label: "Jobs", icon: Activity, match: "prefix" },
     ],
   },
   {
@@ -138,8 +131,12 @@ function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
       </div>
       <nav className="flex-1 space-y-4 overflow-y-auto p-3">
         {NAV_SECTIONS.map((section) => (
-          <div key={section.label}>
-            <p className="mb-1 px-3 text-xxs font-semibold uppercase tracking-wide text-neutral-600">{section.label}</p>
+          <div key={section.label ?? section.items[0]?.href ?? "nav"}>
+            {section.label ? (
+              <p className="mb-1 px-3 text-xxs font-semibold uppercase tracking-wide text-neutral-600">
+                {section.label}
+              </p>
+            ) : null}
             <div className="space-y-0.5">
               {section.items.map((item) => {
                 const active = isNavActive(pathname, item);
