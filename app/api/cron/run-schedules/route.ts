@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { getEnv } from "@/lib/env";
 import { runDuePromptSchedules } from "@/lib/services/prompt-schedule-runner";

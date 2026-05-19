@@ -3,6 +3,7 @@ import { normalizeDomain, searchSerperOrganic, type SerpOrganicResult } from "@/
 
 export async function syncCompetitorRankings(brandId: string) {
   const supabase = await getAdminClient();
+  if (!supabase) throw new Error("SUPABASE_SERVICE_ROLE_KEY not configured");
   const today = new Date().toISOString().slice(0, 10);
 
   const { data: topQueries } = await supabase

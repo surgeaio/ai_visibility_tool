@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { notFoundResponse, serverErrorResponse } from "@/lib/api/errors";
 import { getRequestId, validateBody, validateParams } from "@/lib/api/validate";
 import { promptIdParamSchema, updateBrandSchema } from "@/lib/validators";

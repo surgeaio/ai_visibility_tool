@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { serverErrorResponse } from "@/lib/api/errors";
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateBody } from "@/lib/api/validate";

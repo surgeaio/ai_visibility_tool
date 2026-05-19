@@ -1,4 +1,7 @@
 import { getAdminClient } from "@/lib/services/competitors/access";
+import type { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
+
+type AdminSupabaseClient = NonNullable<ReturnType<typeof tryCreateAdminSupabaseClient>>;
 import {
   isUtilityDomain,
   normalizeDomain,
@@ -8,6 +11,7 @@ import {
 
 export async function detectCompetitors(brandId: string) {
   const supabase = await getAdminClient();
+  if (!supabase) throw new Error("SUPABASE_SERVICE_ROLE_KEY not configured");
   const today = new Date().toISOString().slice(0, 10);
 
   const { data: brand } = await supabase.from("brands").select("id, name, website").eq("id", brandId).maybeSingle();
@@ -81,7 +85,7 @@ export async function detectCompetitors(brandId: string) {
 }
 
 async function fetchOrCacheSnapshot(
-  supabase: Awaited<ReturnType<typeof getAdminClient>>,
+  supabase: AdminSupabaseClient,
   brandId: string,
   query: string,
   today: string,

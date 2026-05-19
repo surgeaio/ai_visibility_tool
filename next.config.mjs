@@ -2,6 +2,7 @@
 const nextConfig = {
   experimental: {
     instrumentationHook: true,
+    serverComponentsExternalPackages: ["@supabase/supabase-js"],
   },
   eslint: {
     dirs: ["app/(dashboard)", "app/api", "app/auth", "app/login", "components", "lib", "store"],

@@ -1,13 +1,17 @@
 import { NextRequest } from "next/server";
+import { hasAdminSupabaseEnv, missingSupabaseResponse } from "@/lib/api/supabase-env";
 import { getAuthedUserId } from "@/lib/api/session";
 import { verifyBrandOwnedByUser } from "@/lib/services/competitors/access";
 import { detectCompetitors } from "@/lib/services/competitors/detect";
 import { generateCompetitorAnalysis } from "@/lib/services/competitors/analyze";
 import { syncCompetitorRankings } from "@/lib/services/competitors/sync-rankings";
 
+export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function POST(req: NextRequest) {
+  if (!hasAdminSupabaseEnv()) return missingSupabaseResponse();
+
   const userId = await getAuthedUserId();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 

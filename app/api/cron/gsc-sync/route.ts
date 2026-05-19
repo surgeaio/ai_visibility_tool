@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getRequestId } from "@/lib/api/validate";
 import { syncGscData } from "@/lib/services/gsc/sync";
 import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { z } from "zod";
 import { isAuthBypassMode } from "@/lib/config";
 import { serverErrorResponse } from "@/lib/api/errors";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { isAuthBypassMode } from "@/lib/config";
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateQuery } from "@/lib/api/validate";

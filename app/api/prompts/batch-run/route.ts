@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { z } from "zod";
 import { adminHasLlmProviders } from "@/lib/ai/admin-providers";
 import { getAuthedUserId } from "@/lib/api/session";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { Redis } from "@upstash/redis";
 import { adminHasLlmProviders } from "@/lib/ai/admin-providers";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId } from "@/lib/api/validate";
 import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";

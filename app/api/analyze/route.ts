@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { analyzePromptOrDemo } from "@/lib/ai/analyzer";
 import type { AIModelKey, ProviderName } from "@/lib/ai/types";
 import { rateLimitResponse, serverErrorResponse } from "@/lib/api/errors";

@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { z } from "zod";
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateBody } from "@/lib/api/validate";

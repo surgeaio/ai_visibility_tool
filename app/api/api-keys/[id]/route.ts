@@ -1,14 +1,18 @@
 import { serverErrorResponse } from "@/lib/api/errors";
+import { hasPublicSupabaseEnv, missingSupabaseResponse } from "@/lib/api/supabase-env";
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateParams } from "@/lib/api/validate";
 import { UserApiKeysRepository } from "@/lib/repositories";
 import { z } from "zod";
 
+export const dynamic = "force-dynamic";
+
 const idParamSchema = z.object({ id: z.string().min(1) });
 
-const repo = new UserApiKeysRepository();
-
 export async function DELETE(req: Request, { params }: { params: { id: string } }) {
+  if (!hasPublicSupabaseEnv()) return missingSupabaseResponse();
+
+  const repo = new UserApiKeysRepository();
   const requestId = getRequestId(req);
   const userId = await getAuthedUserId();
   if (!userId) {

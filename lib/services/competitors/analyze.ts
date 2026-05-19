@@ -18,6 +18,7 @@ type AnalysisPayload = {
 
 export async function generateCompetitorAnalysis(brandId: string) {
   const supabase = await getAdminClient();
+  if (!supabase) throw new Error("SUPABASE_SERVICE_ROLE_KEY not configured");
 
   const { data: gaps } = await supabase
     .from("competitor_rankings")

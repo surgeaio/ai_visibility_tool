@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getRequestId } from "@/lib/api/validate";
 import { syncAllActiveGscConnections } from "@/lib/services/gsc-sync";
 

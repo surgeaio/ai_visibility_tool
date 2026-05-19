@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { NextResponse } from "next/server";
 import { isAuthBypassMode } from "@/lib/config";
 import { createServerSupabaseClient } from "@/lib/supabase/server";

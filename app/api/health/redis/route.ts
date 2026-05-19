@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getRequestId } from "@/lib/api/validate";
 import { getRedisHealth } from "@/lib/redis/health";
 

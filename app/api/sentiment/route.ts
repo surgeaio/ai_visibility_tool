@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { analyzeSentiment } from "@/lib/ai/sentiment";
 import { serverErrorResponse } from "@/lib/api/errors";
 import { getRequestId, validateBody } from "@/lib/api/validate";

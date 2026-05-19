@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { Queue } from "bullmq";
 import { NextResponse } from "next/server";
 import { BULL_QUEUE_NAMES } from "@/lib/queues/queue-names";

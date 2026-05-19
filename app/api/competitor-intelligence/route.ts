@@ -1,8 +1,13 @@
 import { NextRequest } from "next/server";
+import { hasAdminSupabaseEnv, missingSupabaseResponse } from "@/lib/api/supabase-env";
 import { getAuthedUserId } from "@/lib/api/session";
 import { verifyBrandOwnedByUser, getAdminClient } from "@/lib/services/competitors/access";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
+  if (!hasAdminSupabaseEnv()) return missingSupabaseResponse();
+
   const userId = await getAuthedUserId();
   if (!userId) return Response.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -14,6 +19,7 @@ export async function GET(req: NextRequest) {
 
   try {
     const supabase = await getAdminClient();
+    if (!supabase) return missingSupabaseResponse();
 
     const { data: gscSummary } = await supabase
       .from("gsc_daily_metrics")

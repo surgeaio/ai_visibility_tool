@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getGoogleGscRedirectUri } from "@/lib/auth/google-oauth-config";
 import { GoogleOAuthService } from "@/lib/services/google-oauth";
 import { NextRequest, NextResponse } from "next/server";

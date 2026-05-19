@@ -1,12 +1,16 @@
 import { serverErrorResponse } from "@/lib/api/errors";
+import { hasPublicSupabaseEnv, missingSupabaseResponse } from "@/lib/api/supabase-env";
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateQuery } from "@/lib/api/validate";
 import { loadGoogleRankingsForBrand } from "@/lib/services/google-rankings-data";
 import { googleRankingsQuerySchema } from "@/lib/validators/google-rankings.schema";
 
+export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
 export async function GET(req: Request) {
+  if (!hasPublicSupabaseEnv()) return missingSupabaseResponse();
+
   const requestId = getRequestId(req);
   const q = validateQuery(req, googleRankingsQuerySchema, requestId);
   if (!q.success) return q.response;

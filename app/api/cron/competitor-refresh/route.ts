@@ -1,3 +1,5 @@
+export const dynamic = "force-dynamic";
+
 import { getRequestId } from "@/lib/api/validate";
 import { syncCompetitorRankings } from "@/lib/services/competitors/sync-rankings";
 import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
