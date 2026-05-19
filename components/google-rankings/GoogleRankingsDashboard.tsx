@@ -163,10 +163,6 @@ export function GoogleRankingsDashboard() {
     }
   }
 
-  const connectHref = selectedBrandId
-    ? `/api/auth/google?brandId=${encodeURIComponent(selectedBrandId)}`
-    : "#";
-
   if (!selectedBrandId) {
     return <GoogleRankingsEmptyState variant="no-brand" />;
   }
@@ -187,14 +183,14 @@ export function GoogleRankingsDashboard() {
   }
 
   if (gscConnected === false || !data?.connected) {
-    return <GoogleRankingsEmptyState variant="not-connected" connectHref={connectHref} />;
+    return <GoogleRankingsEmptyState variant="not-connected" brandId={selectedBrandId} />;
   }
 
   if (data.empty || !data.summary) {
     return (
       <GoogleRankingsEmptyState
         variant="no-data"
-        connectHref={connectHref}
+        brandId={selectedBrandId}
         onSync={() => void runGscSync()}
         syncBusy={syncBusy}
       />

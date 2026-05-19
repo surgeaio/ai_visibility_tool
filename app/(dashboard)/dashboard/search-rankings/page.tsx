@@ -92,9 +92,10 @@ export default function SearchRankingsPage() {
     return true;
   });
 
-  const connectHref = selectedBrandId
-    ? `/api/auth/google?brandId=${encodeURIComponent(selectedBrandId)}`
-    : "#";
+  function connectSearchConsole() {
+    if (!selectedBrandId) return;
+    window.location.href = `/api/auth/google?brandId=${encodeURIComponent(selectedBrandId)}`;
+  }
 
   if (loading) {
     return <p className="text-sm text-neutral-500">Loading search rankings…</p>;
@@ -112,8 +113,8 @@ export default function SearchRankingsPage() {
             </p>
           </CardHeader>
           <CardContent>
-            <Button asChild>
-              <Link href={connectHref}>Connect Search Console</Link>
+            <Button type="button" onClick={connectSearchConsole}>
+              Connect Search Console
             </Button>
           </CardContent>
         </Card>

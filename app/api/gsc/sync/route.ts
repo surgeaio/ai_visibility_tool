@@ -110,8 +110,12 @@ export async function POST(req: Request) {
   if (connErr) return serverErrorResponse(connErr.message, requestId);
   if (!connection) {
     return Response.json(
-      { error: "No active GSC connections", code: "NOT_CONNECTED", requestId },
-      { status: 404 },
+      {
+        error: "Connect Google Search Console for this client before syncing.",
+        code: "NOT_CONNECTED",
+        requestId,
+      },
+      { status: 400 },
     );
   }
 

@@ -1,21 +1,25 @@
 "use client";
 
-import Link from "next/link";
 import { BarChart3, Link2, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { gscTheme } from "@/lib/google-rankings/theme";
 
 export function GoogleRankingsEmptyState({
   variant,
-  connectHref,
+  brandId,
   onSync,
   syncBusy,
 }: {
   variant: "no-brand" | "not-connected" | "no-data";
-  connectHref?: string;
+  /** Current client — OAuth must use full page navigation, not fetch/Link. */
+  brandId?: string;
   onSync?: () => void;
   syncBusy?: boolean;
 }) {
+  function startGoogleOAuth() {
+    if (!brandId) return;
+    window.location.href = `/api/auth/google?brandId=${encodeURIComponent(brandId)}`;
+  }
   const config = {
     "no-brand": {
       icon: Search,
@@ -46,9 +50,9 @@ export function GoogleRankingsEmptyState({
       <h3 className="text-lg font-semibold text-white">{config.title}</h3>
       <p className="mt-2 max-w-md text-sm text-neutral-400">{config.description}</p>
       <div className="mt-6 flex flex-wrap justify-center gap-2">
-        {variant === "not-connected" && connectHref ? (
-          <Button asChild>
-            <Link href={connectHref}>Connect Search Console</Link>
+        {variant === "not-connected" && brandId ? (
+          <Button type="button" onClick={startGoogleOAuth}>
+            Connect Search Console
           </Button>
         ) : null}
         {variant === "no-data" && onSync ? (

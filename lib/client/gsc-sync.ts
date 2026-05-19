@@ -36,6 +36,9 @@ export async function runGscSyncForBrand(brandId: string): Promise<GscSyncRespon
   });
 
   if (!started.ok) {
+    if (started.status === 400 && started.error.toLowerCase().includes("connect")) {
+      throw new Error("Connect Google Search Console for this client first.");
+    }
     throw new Error(started.error);
   }
 

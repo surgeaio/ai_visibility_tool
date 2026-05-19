@@ -1,5 +1,6 @@
 import { encryptApiKey } from "@/lib/crypto/encryption";
 import { getAppBaseUrl } from "@/lib/auth/google-oauth-config";
+import { saveGscConnection } from "@/lib/auth/save-gsc-connection";
 import { getGscSyncQueue } from "@/lib/queues/gsc-sync.queue";
 import { GoogleOAuthService } from "@/lib/services/google-oauth";
 import { GoogleSearchConsoleService } from "@/lib/services/google-search-console";
@@ -65,7 +66,12 @@ export async function handleGoogleGscOAuthCallback(req: NextRequest): Promise<Ne
 
   let brandId: string;
   try {
-    const raw = Buffer.from(stateEnc, "base64url").toString("utf8");
+    let raw: string;
+    try {
+      raw = Buffer.from(stateEnc, "base64url").toString("utf8");
+    } catch {
+      raw = Buffer.from(stateEnc, "base64").toString("utf8");
+    }
     const parsed = JSON.parse(raw) as { brandId?: string };
     if (!parsed.brandId) throw new Error("missing brand");
     brandId = parsed.brandId;
@@ -96,7 +102,11 @@ export async function handleGoogleGscOAuthCallback(req: NextRequest): Promise<Ne
     }
 
     const admin = tryCreateAdminSupabaseClient();
-    const db = admin ?? supabase;
+    if (!admin) {
+      console.error("[gsc-oauth-callback] SUPABASE_SERVICE_ROLE_KEY missing — cannot save tokens");
+      return NextResponse.redirect(rankingsUrl(base, { error: "db_error", detail: "server_config" }));
+    }
+    const db = admin;
 
     const { data: brand, error: brandErr } = await db
       .from("brands")
@@ -129,13 +139,12 @@ export async function handleGoogleGscOAuthCallback(req: NextRequest): Promise<Ne
       updated_at: new Date().toISOString(),
     };
 
-    const { error: upsertErr } = await db.from("gsc_connections").upsert(row, {
-      onConflict: "brand_id,site_url",
-    });
-
-    if (upsertErr) {
-      console.error("[gsc-oauth-callback] upsert failed:", upsertErr.message, upsertErr.code);
-      return NextResponse.redirect(rankingsUrl(base, { error: "db_error" }));
+    const saved = await saveGscConnection(db, row);
+    if (!saved.ok) {
+      console.error("[gsc-oauth-callback] save failed:", saved.message);
+      return NextResponse.redirect(
+        rankingsUrl(base, { error: "db_error", detail: encodeURIComponent(saved.message.slice(0, 120)) }),
+      );
     }
 
     console.info("[gsc-oauth-callback] connected", { userId: user.id, brandId, siteUrl });
