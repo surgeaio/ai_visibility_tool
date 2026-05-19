@@ -692,6 +692,162 @@ export interface Database {
         }>;
         Relationships: [];
       };
+      brand_competitors: {
+        Row: {
+          id: string;
+          brand_id: string;
+          competitor_domain: string;
+          competitor_name: string | null;
+          is_auto_detected: boolean | null;
+          is_active: boolean | null;
+          detection_score: number | null;
+          first_seen_at: string | null;
+          last_seen_at: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          brand_id: string;
+          competitor_domain: string;
+          competitor_name?: string | null;
+          is_auto_detected?: boolean | null;
+          is_active?: boolean | null;
+          detection_score?: number | null;
+          first_seen_at?: string | null;
+          last_seen_at?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<{
+          id: string;
+          brand_id: string;
+          competitor_domain: string;
+          competitor_name: string | null;
+          is_auto_detected: boolean | null;
+          is_active: boolean | null;
+          detection_score: number | null;
+          first_seen_at: string | null;
+          last_seen_at: string | null;
+          created_at: string | null;
+        }>;
+        Relationships: [];
+      };
+      serp_snapshots: {
+        Row: {
+          id: string;
+          brand_id: string;
+          query: string;
+          snapshot_date: string;
+          raw_results: unknown;
+          total_results: number | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          brand_id: string;
+          query: string;
+          snapshot_date: string;
+          raw_results?: unknown;
+          total_results?: number | null;
+          created_at?: string | null;
+        };
+        Update: Partial<{
+          id: string;
+          brand_id: string;
+          query: string;
+          snapshot_date: string;
+          raw_results: unknown;
+          total_results: number | null;
+          created_at: string | null;
+        }>;
+        Relationships: [];
+      };
+      competitor_rankings: {
+        Row: {
+          id: string;
+          brand_id: string;
+          competitor_id: string | null;
+          competitor_domain: string;
+          query: string;
+          position: number;
+          page_url: string;
+          page_title: string | null;
+          page_snippet: string | null;
+          snapshot_date: string;
+          your_position: number | null;
+          position_gap: number | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          brand_id: string;
+          competitor_id?: string | null;
+          competitor_domain: string;
+          query: string;
+          position: number;
+          page_url: string;
+          page_title?: string | null;
+          page_snippet?: string | null;
+          snapshot_date: string;
+          your_position?: number | null;
+          position_gap?: number | null;
+          created_at?: string | null;
+        };
+        Update: Partial<{
+          id: string;
+          brand_id: string;
+          competitor_id: string | null;
+          competitor_domain: string;
+          query: string;
+          position: number;
+          page_url: string;
+          page_title: string | null;
+          page_snippet: string | null;
+          snapshot_date: string;
+          your_position: number | null;
+          position_gap: number | null;
+          created_at: string | null;
+        }>;
+        Relationships: [];
+      };
+      competitor_analysis: {
+        Row: {
+          id: string;
+          brand_id: string;
+          competitor_domain: string;
+          query: string | null;
+          analysis_type: string;
+          winning_factors: unknown;
+          action_items: unknown;
+          raw_analysis: string | null;
+          model_used: string | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          brand_id: string;
+          competitor_domain: string;
+          query?: string | null;
+          analysis_type: string;
+          winning_factors?: unknown;
+          action_items?: unknown;
+          raw_analysis?: string | null;
+          model_used?: string | null;
+          created_at?: string | null;
+        };
+        Update: Partial<{
+          id: string;
+          brand_id: string;
+          competitor_domain: string;
+          query: string | null;
+          analysis_type: string;
+          winning_factors: unknown;
+          action_items: unknown;
+          raw_analysis: string | null;
+          model_used: string | null;
+          created_at: string | null;
+        }>;
+        Relationships: [];
+      };
       crawl_jobs: {
         Row: {
           id: string;
