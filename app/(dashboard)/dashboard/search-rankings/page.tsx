@@ -72,6 +72,9 @@ export default function SearchRankingsPage() {
   }, [selectedBrandId]);
 
   useEffect(() => {
+    setConnected(false);
+    setRankings([]);
+    setSuggestions([]);
     void load();
   }, [load]);
 

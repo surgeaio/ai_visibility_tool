@@ -13,7 +13,13 @@ export async function GET(req: NextRequest) {
   }
   let authUrl: string;
   try {
-    const state = Buffer.from(JSON.stringify({ brandId }), "utf8").toString("base64url");
+    const state = Buffer.from(
+      JSON.stringify({
+        brandId,
+        returnUrl: "/dashboard/google-rankings",
+      }),
+      "utf8",
+    ).toString("base64url");
     authUrl = new GoogleOAuthService().getAuthUrl(state);
     console.info("[gsc-oauth-start]", { brandId, redirectUri: getGoogleGscRedirectUri() });
   } catch (e) {
@@ -34,7 +40,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "brandId is required" }, { status: 400 });
   }
   try {
-    const state = Buffer.from(JSON.stringify({ brandId }), "utf8").toString("base64url");
+    const state = Buffer.from(
+      JSON.stringify({
+        brandId,
+        returnUrl: "/dashboard/google-rankings",
+      }),
+      "utf8",
+    ).toString("base64url");
     const authUrl = new GoogleOAuthService().getAuthUrl(state);
     return NextResponse.json({ authUrl });
   } catch {

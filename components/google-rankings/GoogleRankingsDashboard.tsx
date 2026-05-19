@@ -68,18 +68,37 @@ export function GoogleRankingsDashboard() {
   const [pagesPage, setPagesPage] = useState(1);
   const [page23Page, setPage23Page] = useState(1);
   const [loading, setLoading] = useState(true);
+  const [gscConnected, setGscConnected] = useState<boolean | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<ApiPayload | null>(null);
   const [syncBusy, setSyncBusy] = useState(false);
 
+  const checkGscConnection = useCallback(async (brandId: string) => {
+    const res = await fetch(`/api/gsc/status?brandId=${encodeURIComponent(brandId)}`, {
+      cache: "no-store",
+    });
+    if (!res.ok) return false;
+    const json = (await res.json()) as { connected?: boolean };
+    return Boolean(json.connected);
+  }, []);
+
   const load = useCallback(async () => {
     if (!selectedBrandId) {
       setData(null);
+      setGscConnected(null);
       setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
+    setData(null);
+
+    const connected = await checkGscConnection(selectedBrandId);
+    setGscConnected(connected);
+    if (!connected) {
+      setLoading(false);
+      return;
+    }
     const params = new URLSearchParams({
       brandId: selectedBrandId,
       range,
@@ -96,12 +115,14 @@ export function GoogleRankingsDashboard() {
       setData(res.data);
     }
     setLoading(false);
-  }, [selectedBrandId, range, queriesPage, pagesPage, page23Page]);
+  }, [selectedBrandId, range, queriesPage, pagesPage, page23Page, checkGscConnection]);
 
   useEffect(() => {
     setQueriesPage(1);
     setPagesPage(1);
     setPage23Page(1);
+    setGscConnected(null);
+    setData(null);
   }, [selectedBrandId, range]);
 
   useEffect(() => {
@@ -110,10 +131,17 @@ export function GoogleRankingsDashboard() {
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    if (params.get("connected") === "true") toast.success("Search Console connected.");
+    if (params.get("connected") === "true") {
+      toast.success("Search Console connected.");
+      window.history.replaceState({}, "", "/dashboard/google-rankings");
+      void load();
+    }
     const err = params.get("error");
-    if (err) toast.error(`Connection failed: ${err.replace(/_/g, " ")}`);
-  }, []);
+    if (err) {
+      toast.error(`Connection failed: ${err.replace(/_/g, " ")}`);
+      window.history.replaceState({}, "", "/dashboard/google-rankings");
+    }
+  }, [load]);
 
   async function runGscSync() {
     if (!selectedBrandId) return;
@@ -158,7 +186,7 @@ export function GoogleRankingsDashboard() {
     );
   }
 
-  if (!data?.connected) {
+  if (gscConnected === false || !data?.connected) {
     return <GoogleRankingsEmptyState variant="not-connected" connectHref={connectHref} />;
   }
 

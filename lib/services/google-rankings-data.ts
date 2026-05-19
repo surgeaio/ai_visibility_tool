@@ -59,7 +59,10 @@ export async function loadGoogleRankingsForBrand(params: {
     .from("gsc_connections")
     .select("id, site_url, last_synced_at, google_email")
     .eq("brand_id", brandId)
+    .eq("user_id", userId)
     .eq("is_active", true)
+    .order("last_synced_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (!connection) {

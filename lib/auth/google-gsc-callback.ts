@@ -80,7 +80,7 @@ export async function handleGoogleGscOAuthCallback(req: NextRequest): Promise<Ne
 
   if (!user) {
     const login = new URL("/login", base);
-    login.searchParams.set("next", "/dashboard/google-rankings");
+    login.searchParams.set("next", `/dashboard/google-rankings?brandId=${encodeURIComponent(brandId)}`);
     return NextResponse.redirect(login.toString());
   }
 
@@ -130,7 +130,7 @@ export async function handleGoogleGscOAuthCallback(req: NextRequest): Promise<Ne
     };
 
     const { error: upsertErr } = await db.from("gsc_connections").upsert(row, {
-      onConflict: "user_id,site_url",
+      onConflict: "brand_id,site_url",
     });
 
     if (upsertErr) {
@@ -170,5 +170,7 @@ export async function handleGoogleGscOAuthCallback(req: NextRequest): Promise<Ne
     return NextResponse.redirect(rankingsUrl(base, { error: code }));
   }
 
-  return NextResponse.redirect(rankingsUrl(base, { connected: "true" }));
+  return NextResponse.redirect(
+    rankingsUrl(base, { connected: "true", brandId }),
+  );
 }

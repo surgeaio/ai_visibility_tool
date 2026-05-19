@@ -30,11 +30,22 @@ export async function GET(req: Request) {
 
   try {
     const supabase = await createServerSupabaseClient();
+    const { data: brand } = await supabase
+      .from("brands")
+      .select("id")
+      .eq("id", q.data.brandId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!brand) {
+      return Response.json({ connected: false, requestId });
+    }
+
     const { data, error } = await supabase
       .from("gsc_connections")
-      .select("last_synced_at, site_url")
-      .eq("user_id", userId)
+      .select("id, last_synced_at, site_url, token_expires_at")
       .eq("brand_id", q.data.brandId)
+      .eq("user_id", userId)
       .eq("is_active", true)
       .order("last_synced_at", { ascending: false })
       .limit(1)
@@ -44,8 +55,10 @@ export async function GET(req: Request) {
     }
     return Response.json({
       connected: !!data,
+      connectionId: data?.id ?? null,
       lastSyncedAt: data?.last_synced_at ?? null,
       siteUrl: data?.site_url ?? null,
+      tokenExpiry: data?.token_expires_at ?? null,
       source: "live" as const,
       requestId,
     });

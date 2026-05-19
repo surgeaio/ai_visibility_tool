@@ -31,11 +31,25 @@ export async function GET(req: NextRequest) {
   const admin = tryCreateAdminSupabaseClient();
   const supabase = admin ?? (await createServerSupabaseClient());
 
+  const { data: brand } = await supabase
+    .from("brands")
+    .select("id")
+    .eq("id", brandId)
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (!brand) {
+    return Response.json({ error: "Brand not found", requestId }, { status: 403 });
+  }
+
   const { data: connection } = await supabase
     .from("gsc_connections")
     .select("id, site_url, last_synced_at")
     .eq("brand_id", brandId)
+    .eq("user_id", userId)
     .eq("is_active", true)
+    .order("last_synced_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
 
   if (!connection) {
