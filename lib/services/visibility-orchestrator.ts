@@ -1,0 +1,337 @@
+import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
+import { resolvePlatformIdForProvider } from "@/lib/services/llm-platforms-seed";
+import type { LlmKeyProviderName } from "@/lib/ai/llm-provider-factory";
+import { runPromptOnAllModels, type AIModelName } from "@/lib/services/ai-executor";
+import { analyzeResponse } from "@/lib/services/response-analyzer";
+
+const MODEL_TO_PROVIDER: Record<AIModelName, LlmKeyProviderName> = {
+  chatgpt: "openai",
+  claude: "anthropic",
+  gemini: "gemini",
+  perplexity: "perplexity",
+};
+
+function requireAdmin() {
+  const admin = tryCreateAdminSupabaseClient();
+  if (!admin) throw new Error("SUPABASE_SERVICE_ROLE_KEY missing");
+  return admin;
+}
+
+export interface RunPromptOptions {
+  brandId: string;
+  promptId: string;
+  models?: AIModelName[];
+  triggeredBy?: "manual" | "scheduled" | "on_demand";
+}
+
+async function syncLlmBrandPerformance(params: {
+  brandId: string;
+  promptId: string;
+  model: AIModelName;
+  result: {
+    isMentioned: boolean;
+    rankPosition: number | null;
+    sentiment: string | null;
+    sentimentScore: number | null;
+    visibilityScore: number;
+    rawResponse: string;
+    context: string | null;
+  };
+}) {
+  const admin = requireAdmin();
+  const platformId = await resolvePlatformIdForProvider(MODEL_TO_PROVIDER[params.model]);
+  await admin.from("llm_brand_performance").insert({
+    brand_id: params.brandId,
+    platform_id: platformId,
+    prompt_id: params.promptId,
+    is_mentioned: params.result.isMentioned,
+    mention_count: params.result.isMentioned ? 1 : 0,
+    rank_position: params.result.rankPosition,
+    sentiment: params.result.sentiment,
+    sentiment_score: params.result.sentimentScore,
+    visibility_score: params.result.visibilityScore,
+    raw_response: params.result.rawResponse.slice(0, 8000),
+    context: params.result.context,
+    measured_at: new Date().toISOString(),
+  });
+}
+
+function visibilityFromAnalysis(mentioned: boolean, position: number | null, sentiment: number | null): number {
+  let score = 0;
+  if (mentioned) score += 42;
+  if (position != null) score += Math.max(0, 28 - (position - 1) * 6);
+  if (sentiment != null) score += sentiment * 0.22;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+export async function refreshDailyMetrics(brandId: string, date: string) {
+  const supabase = requireAdmin();
+
+  const { data: analyses } = await supabase
+    .from("chat_analysis")
+    .select("ai_model, brand_mentioned, brand_position, brand_sentiment, brand_sentiment_label")
+    .eq("brand_id", brandId)
+    .eq("run_date", date);
+
+  if (!analyses?.length) return;
+
+  const models = ["all", "chatgpt", "claude", "gemini", "perplexity"] as const;
+
+  for (const model of models) {
+    const rows =
+      model === "all" ? analyses : analyses.filter((a) => a.ai_model === model);
+    if (!rows.length) continue;
+
+    const total = rows.length;
+    const mentions = rows.filter((r) => r.brand_mentioned).length;
+    const visibility = (mentions / total) * 100;
+
+    const positions = rows
+      .map((r) => r.brand_position)
+      .filter((p): p is number => p != null);
+    const avgPos = positions.length
+      ? positions.reduce((a, b) => a + b, 0) / positions.length
+      : null;
+
+    const sentiments = rows
+      .map((r) => r.brand_sentiment)
+      .filter((s): s is number => s != null);
+    const avgSent = sentiments.length
+      ? sentiments.reduce((a, b) => a + b, 0) / sentiments.length
+      : null;
+
+    const pos = rows.filter((r) => r.brand_sentiment_label === "positive").length;
+    const neu = rows.filter((r) => r.brand_sentiment_label === "neutral").length;
+    const neg = rows.filter((r) => r.brand_sentiment_label === "negative").length;
+
+    await supabase.from("brand_daily_metrics").upsert(
+      {
+        brand_id: brandId,
+        ai_model: model,
+        metric_date: date,
+        total_chats: total,
+        brand_mentions: mentions,
+        visibility_pct: Math.round(visibility * 100) / 100,
+        avg_position: avgPos != null ? Math.round(avgPos * 100) / 100 : null,
+        avg_sentiment: avgSent != null ? Math.round(avgSent * 100) / 100 : null,
+        positive_mentions: pos,
+        neutral_mentions: neu,
+        negative_mentions: neg,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: "brand_id,ai_model,metric_date" },
+    );
+  }
+}
+
+export async function runSinglePrompt(opts: RunPromptOptions) {
+  const supabase = requireAdmin();
+
+  const { data: prompt, error: pErr } = await supabase
+    .from("prompts")
+    .select("id, text, brand_id")
+    .eq("id", opts.promptId)
+    .eq("brand_id", opts.brandId)
+    .single();
+  if (pErr || !prompt) throw new Error("Prompt not found");
+
+  const { data: brand, error: bErr } = await supabase
+    .from("brands")
+    .select("id, name, domain, website")
+    .eq("id", opts.brandId)
+    .single();
+  if (bErr || !brand) throw new Error("Brand not found");
+
+  const { data: competitors } = await supabase
+    .from("competitors")
+    .select("competitor_name, domain, website")
+    .eq("brand_id", opts.brandId);
+
+  const competitorList = (competitors ?? []).map((c) => ({
+    name: c.competitor_name as string,
+    domain: (c.domain ?? c.website) as string | null,
+  }));
+
+  const models = opts.models ?? ["chatgpt", "claude", "gemini", "perplexity"];
+  const responses = await runPromptOnAllModels(prompt.text as string, models);
+  const runDate = new Date().toISOString().slice(0, 10);
+  const results: Array<Record<string, unknown>> = [];
+
+  for (const resp of responses) {
+    if (resp.status === "failed" || !resp.responseText) {
+      await supabase.from("chat_responses").insert({
+        brand_id: opts.brandId,
+        prompt_id: opts.promptId,
+        ai_model: resp.model,
+        prompt_text: prompt.text,
+        response_text: "",
+        raw_sources: resp.sources,
+        error_message: resp.error,
+        status: "failed",
+        run_date: runDate,
+      });
+      results.push({ model: resp.model, status: "failed", error: resp.error });
+      continue;
+    }
+
+    const { data: savedResp, error: saveErr } = await supabase
+      .from("chat_responses")
+      .insert({
+        brand_id: opts.brandId,
+        prompt_id: opts.promptId,
+        ai_model: resp.model,
+        prompt_text: prompt.text,
+        response_text: resp.responseText,
+        raw_sources: resp.sources,
+        tokens_used: resp.tokensUsed,
+        status: "success",
+        run_date: runDate,
+      })
+      .select("id")
+      .single();
+
+    if (saveErr || !savedResp) {
+      results.push({ model: resp.model, status: "save_failed" });
+      continue;
+    }
+
+    try {
+      const analysis = await analyzeResponse({
+        responseText: resp.responseText,
+        ownBrand: {
+          name: brand.name as string,
+          domain: (brand.domain ?? brand.website) as string | null,
+        },
+        competitors: competitorList,
+        rawSources: resp.sources,
+      });
+
+      await supabase.from("chat_analysis").insert({
+        chat_response_id: savedResp.id,
+        brand_id: opts.brandId,
+        prompt_id: opts.promptId,
+        ai_model: resp.model,
+        run_date: runDate,
+        brand_mentioned: analysis.brandMentioned,
+        brand_position: analysis.brandPosition,
+        brand_sentiment: analysis.brandSentiment,
+        brand_sentiment_label: analysis.brandSentimentLabel,
+        brand_mention_context: analysis.brandMentionContext,
+        all_brands_mentioned: analysis.allBrandsMentioned,
+        sources_used: analysis.domainsReferenced.map((d) => ({ domain: d })),
+      });
+
+      if (analysis.domainsReferenced.length > 0) {
+        await supabase.from("source_appearances").insert(
+          analysis.domainsReferenced.map((domain) => ({
+            brand_id: opts.brandId,
+            chat_response_id: savedResp.id,
+            prompt_id: opts.promptId,
+            ai_model: resp.model,
+            domain,
+            was_used: true,
+            was_cited: true,
+            run_date: runDate,
+          })),
+        );
+      }
+
+      const visibilityScore = visibilityFromAnalysis(
+        analysis.brandMentioned,
+        analysis.brandPosition,
+        analysis.brandSentiment,
+      );
+
+      await syncLlmBrandPerformance({
+        brandId: opts.brandId,
+        promptId: opts.promptId,
+        model: resp.model,
+        result: {
+          isMentioned: analysis.brandMentioned,
+          rankPosition: analysis.brandPosition,
+          sentiment: analysis.brandSentimentLabel,
+          sentimentScore: analysis.brandSentiment,
+          visibilityScore,
+          rawResponse: resp.responseText,
+          context: analysis.brandMentionContext,
+        },
+      });
+
+      results.push({
+        model: resp.model,
+        status: "success",
+        brandMentioned: analysis.brandMentioned,
+        position: analysis.brandPosition,
+        sentiment: analysis.brandSentiment,
+      });
+    } catch (analyzeErr) {
+      const msg = analyzeErr instanceof Error ? analyzeErr.message : "analyze_failed";
+      results.push({ model: resp.model, status: "analyze_failed", error: msg });
+    }
+  }
+
+  await refreshDailyMetrics(opts.brandId, runDate);
+  return { promptId: opts.promptId, results };
+}
+
+export async function runAllPromptsForBrand(
+  brandId: string,
+  triggeredBy: "manual" | "scheduled" | "on_demand" = "manual",
+  triggeredByUserId?: string,
+) {
+  const supabase = requireAdmin();
+
+  const { data: prompts } = await supabase
+    .from("prompts")
+    .select("id")
+    .eq("brand_id", brandId)
+    .eq("is_active", true);
+
+  if (!prompts?.length) {
+    return { jobId: null, completed: 0, failed: 0, message: "No active prompts to run" };
+  }
+
+  const { data: job } = await supabase
+    .from("prompt_run_jobs")
+    .insert({
+      brand_id: brandId,
+      job_type: triggeredBy,
+      status: "running",
+      total_prompts: prompts.length,
+      triggered_by: triggeredByUserId ?? null,
+      started_at: new Date().toISOString(),
+    })
+    .select("id")
+    .single();
+
+  let completed = 0;
+  let failed = 0;
+
+  for (const p of prompts) {
+    try {
+      await runSinglePrompt({ brandId, promptId: p.id as string, triggeredBy });
+      completed += 1;
+    } catch (err) {
+      console.error("[visibility-orchestrator] prompt failed", p.id, err);
+      failed += 1;
+    }
+    if (job?.id) {
+      await supabase
+        .from("prompt_run_jobs")
+        .update({ completed_prompts: completed, failed_prompts: failed })
+        .eq("id", job.id);
+    }
+  }
+
+  if (job?.id) {
+    await supabase
+      .from("prompt_run_jobs")
+      .update({
+        status: failed === 0 ? "completed" : completed > 0 ? "partial" : "failed",
+        completed_at: new Date().toISOString(),
+      })
+      .eq("id", job.id);
+  }
+
+  return { jobId: job?.id ?? null, completed, failed };
+}

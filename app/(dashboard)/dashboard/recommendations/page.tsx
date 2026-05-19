@@ -35,6 +35,18 @@ export default function RecommendationsPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [aiRecs, setAiRecs] = useState<
+    Array<{
+      id: string;
+      title: string;
+      description: string;
+      priority: string;
+      impact_score: number | null;
+      action_items: string[] | null;
+    }>
+  >([]);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiGenerating, setAiGenerating] = useState(false);
 
   const load = useCallback(async () => {
     if (!selectedBrandId) return;
@@ -62,9 +74,46 @@ export default function RecommendationsPage() {
     }
   }, [selectedBrandId]);
 
+  const loadAi = useCallback(async () => {
+    if (!selectedBrandId) return;
+    setAiLoading(true);
+    try {
+      const res = await fetch(`/api/visibility/recommendations?brandId=${selectedBrandId}`, {
+        cache: "no-store",
+      });
+      const json = (await res.json()) as { recommendations?: typeof aiRecs };
+      setAiRecs(json.recommendations ?? []);
+    } catch {
+      setAiRecs([]);
+    } finally {
+      setAiLoading(false);
+    }
+  }, [selectedBrandId]);
+
   useEffect(() => {
     void load();
-  }, [load]);
+    void loadAi();
+  }, [load, loadAi]);
+
+  async function handleRegenerateAi() {
+    if (!selectedBrandId || aiGenerating) return;
+    setAiGenerating(true);
+    try {
+      const res = await fetch("/api/visibility/recommendations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: selectedBrandId }),
+      });
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Generate failed");
+      toast.success("AI recommendations updated");
+      await loadAi();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Failed to regenerate");
+    } finally {
+      setAiGenerating(false);
+    }
+  }
 
   const filtered = useMemo(() => {
     return items.filter((r) => {
@@ -151,6 +200,55 @@ export default function RecommendationsPage() {
       ) : error ? (
         <p className="text-sm text-red-400">{error}</p>
       ) : null}
+
+      <Card className="border-[#262626] bg-[#111]">
+        <CardContent className="space-y-4 p-6">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="font-semibold text-white">AI visibility insights</h3>
+              <p className="text-sm text-neutral-500">
+                Source opportunities, sentiment fixes, and content gaps from LLM runs.
+              </p>
+            </div>
+            <Button size="sm" variant="secondary" disabled={aiGenerating} onClick={() => void handleRegenerateAi()}>
+              {aiGenerating ? "Generating…" : "Regenerate AI insights"}
+            </Button>
+          </div>
+          {aiLoading ? (
+            <p className="text-sm text-neutral-500">Loading AI recommendations…</p>
+          ) : aiRecs.length === 0 ? (
+            <p className="text-sm text-neutral-500">
+              No AI insights yet. Run prompts on LLM Visibility, then regenerate.
+            </p>
+          ) : (
+            <div className="grid gap-3">
+              {aiRecs.map((r) => (
+                <div key={r.id} className="rounded-lg border border-[#262626] bg-[#0a0a0a] p-4">
+                  <div className="mb-2 flex flex-wrap items-start justify-between gap-2">
+                    <h4 className="font-medium text-white">{r.title}</h4>
+                    <div className="flex gap-2 text-xs">
+                      <span className="rounded bg-[#262626] px-2 py-1 text-neutral-300">{r.priority}</span>
+                      {r.impact_score != null ? (
+                        <span className="rounded bg-[#262626] px-2 py-1 text-neutral-300">
+                          Impact {r.impact_score}/100
+                        </span>
+                      ) : null}
+                    </div>
+                  </div>
+                  <p className="text-sm text-neutral-400">{r.description}</p>
+                  {r.action_items && r.action_items.length > 0 ? (
+                    <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-neutral-400">
+                      {r.action_items.map((item, i) => (
+                        <li key={i}>{item}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       <div className="flex flex-wrap gap-2">
         {(

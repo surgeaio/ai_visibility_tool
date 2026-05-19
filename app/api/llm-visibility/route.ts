@@ -93,7 +93,7 @@ export async function GET(req: Request) {
 
     const prompts = (promptRows ?? []).map((p) => ({
       id: p.id as string,
-      prompt: p.text as string,
+      prompt: (p.text as string) ?? "",
     }));
 
     const payload = buildLlmVisibilityDashboard({

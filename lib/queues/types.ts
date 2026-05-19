@@ -55,4 +55,7 @@ export interface GscSyncJobData {
   requestId?: string;
 }
 
-export type PlatformSchedulerJobName = "prompt-schedules" | "gsc-sync";
+export type PlatformSchedulerJobName =
+  | "prompt-schedules"
+  | "gsc-sync"
+  | "visibility-daily-run";

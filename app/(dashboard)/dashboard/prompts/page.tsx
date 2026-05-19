@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { Download, MoreHorizontal, Plus, Play, RefreshCw } from "lucide-react";
-import { SentimentBadge } from "@/components/dashboard/SentimentBadge";
 import { PromptDetailSheet } from "@/components/dashboard/PromptDetailSheet";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -48,10 +47,32 @@ export default function PromptsPage() {
     }>
   >([]);
   const [llmResultsLoading, setLlmResultsLoading] = useState(false);
+  const [visibilityByPrompt, setVisibilityByPrompt] = useState<
+    Record<string, { visibility_pct: number | null; avg_sentiment: number | null; last_run: string | null }>
+  >({});
+  const [runningAll, setRunningAll] = useState(false);
 
   useEffect(() => {
     setSelected({});
     void fetchApiPrompts(selectedBrandId || undefined);
+    if (!selectedBrandId) {
+      setVisibilityByPrompt({});
+      return;
+    }
+    void fetch(`/api/visibility/prompt-results?brandId=${selectedBrandId}`, { cache: "no-store" })
+      .then((r) => r.json())
+      .then((json: { prompts?: Array<{ id: string; visibility_pct: number | null; avg_sentiment: number | null; last_run: string | null }> }) => {
+        const map: typeof visibilityByPrompt = {};
+        for (const row of json.prompts ?? []) {
+          map[row.id] = {
+            visibility_pct: row.visibility_pct,
+            avg_sentiment: row.avg_sentiment,
+            last_run: row.last_run,
+          };
+        }
+        setVisibilityByPrompt(map);
+      })
+      .catch(() => setVisibilityByPrompt({}));
   }, [selectedBrandId, fetchApiPrompts]);
 
   const detail = useMemo(() => prompts.find((p) => p.id === detailId), [prompts, detailId]);
@@ -143,6 +164,41 @@ export default function PromptsPage() {
     }
   }
 
+  async function handleRunAllPrompts() {
+    if (!selectedBrandId || runningAll) return;
+    setRunningAll(true);
+    setActionError(null);
+    try {
+      const res = await fetch("/api/visibility/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: selectedBrandId }),
+      });
+      const json = (await res.json()) as { success?: boolean; error?: string; completed?: number; failed?: number };
+      if (!res.ok || !json.success) throw new Error(json.error ?? "Run failed");
+      await fetchApiPrompts(selectedBrandId);
+      const metricsRes = await fetch(`/api/visibility/prompt-results?brandId=${selectedBrandId}`, {
+        cache: "no-store",
+      });
+      const metricsJson = (await metricsRes.json()) as {
+        prompts?: Array<{ id: string; visibility_pct: number | null; avg_sentiment: number | null; last_run: string | null }>;
+      };
+      const map: typeof visibilityByPrompt = {};
+      for (const row of metricsJson.prompts ?? []) {
+        map[row.id] = {
+          visibility_pct: row.visibility_pct,
+          avg_sentiment: row.avg_sentiment,
+          last_run: row.last_run,
+        };
+      }
+      setVisibilityByPrompt(map);
+    } catch (e) {
+      setActionError(e instanceof Error ? e.message : "Failed to run prompts");
+    } finally {
+      setRunningAll(false);
+    }
+  }
+
   async function runSelected() {
     setActionError(null);
     try {
@@ -180,6 +236,13 @@ export default function PromptsPage() {
           <p className="text-sm text-neutral-500">Manage tracked prompts and review multi-model responses.</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            disabled={!selectedBrandId || runningAll}
+            onClick={() => void handleRunAllPrompts()}
+          >
+            {runningAll ? "Running…" : "Run all prompts"}
+          </Button>
           {selectedIds.length > 0 && (
             <Button variant="secondary" size="sm" onClick={() => void runSelected()}>
               <Play className="mr-2 h-4 w-4" />
@@ -328,11 +391,47 @@ export default function PromptsPage() {
                 <td className="max-w-xs truncate p-4 text-neutral-200">{p.text}</td>
                 <td className="p-4 text-neutral-400">{p.category}</td>
                 <td className="p-4 font-mono text-xs text-neutral-500">
-                  {new Date(p.lastRun).toLocaleDateString()}
+                  {visibilityByPrompt[p.id]?.last_run
+                    ? new Date(visibilityByPrompt[p.id].last_run!).toLocaleDateString()
+                    : new Date(p.lastRun).toLocaleDateString()}
                 </td>
-                <td className="p-4">{p.visibility ? <span className="text-emerald-400">Yes</span> : "No"}</td>
                 <td className="p-4">
-                  {p.sentiment != null ? <SentimentBadge score={p.sentiment} size="sm" /> : "—"}
+                  {visibilityByPrompt[p.id]?.visibility_pct == null ? (
+                    <span className="text-sm text-neutral-500">Not run yet</span>
+                  ) : (
+                    <span
+                      className={
+                        visibilityByPrompt[p.id]!.visibility_pct! >= 50
+                          ? "text-emerald-400"
+                          : "text-neutral-200"
+                      }
+                    >
+                      {visibilityByPrompt[p.id]!.visibility_pct}%
+                    </span>
+                  )}
+                </td>
+                <td className="p-4">
+                  {visibilityByPrompt[p.id]?.avg_sentiment == null ? (
+                    <span className="text-neutral-500">—</span>
+                  ) : (
+                    <div className="flex items-center gap-2">
+                      <div className="h-2 w-10 overflow-hidden rounded bg-[#262626]">
+                        <div
+                          className={`h-2 rounded ${
+                            visibilityByPrompt[p.id]!.avg_sentiment! >= 70
+                              ? "bg-emerald-500"
+                              : visibilityByPrompt[p.id]!.avg_sentiment! >= 40
+                                ? "bg-yellow-500"
+                                : "bg-red-500"
+                          }`}
+                          style={{ width: `${visibilityByPrompt[p.id]!.avg_sentiment}%` }}
+                        />
+                      </div>
+                      <span className="text-sm text-neutral-300">
+                        {visibilityByPrompt[p.id]!.avg_sentiment}
+                      </span>
+                    </div>
+                  )}
                 </td>
                 <td className="p-4">
                   <DropdownMenu>

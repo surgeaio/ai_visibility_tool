@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Zap } from "lucide-react";
+import { toast } from "sonner";
 import { RunPromptsModal } from "./_components/RunPromptsModal";
 import { LLMVisibilityFilters } from "@/components/llm-visibility/LLMVisibilityFilters";
 import { VisibilityCharts } from "@/components/llm-visibility/VisibilityCharts";
@@ -37,6 +38,7 @@ export default function LLMVisibilityPage() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<LlmVisibilityDashboardResponse>(EMPTY_DASHBOARD);
   const [runModalOpen, setRunModalOpen] = useState(false);
+  const [runningAll, setRunningAll] = useState(false);
 
   const fetchAllData = useCallback(async () => {
     if (!selectedBrandId) {
@@ -111,6 +113,34 @@ export default function LLMVisibilityPage() {
     }
   }, [data.prompts, focusPromptId]);
 
+  async function handleRunPromptsNow() {
+    if (!selectedBrandId || runningAll) return;
+    setRunningAll(true);
+    try {
+      const res = await fetch("/api/visibility/run", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: selectedBrandId }),
+      });
+      const json = (await res.json()) as {
+        success?: boolean;
+        completed?: number;
+        failed?: number;
+        error?: string;
+        message?: string;
+      };
+      if (!res.ok || !json.success) {
+        throw new Error(json.error ?? json.message ?? "Run failed");
+      }
+      toast.success(`Completed ${json.completed ?? 0} prompts (${json.failed ?? 0} failed).`);
+      await fetchAllData();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to run prompts");
+    } finally {
+      setRunningAll(false);
+    }
+  }
+
   async function handleDownloadReport() {
     if (!selectedBrandId) return;
     const params = new URLSearchParams({
@@ -135,7 +165,7 @@ export default function LLMVisibilityPage() {
 
   const promptLabel =
     data.promptPerformance?.prompt ??
-    data.prompts.find((p) => p.id === focusPromptId)?.prompt ??
+    data.prompts.find((p) => p.id === focusPromptId)?.prompt?.slice(0, 80) ??
     "";
 
   return (
@@ -146,8 +176,16 @@ export default function LLMVisibilityPage() {
           <p className="mt-1 text-sm text-neutral-500">Where AI assistants mention your brand</p>
         </div>
         <div className="flex flex-wrap gap-2">
+          <Button
+            size="sm"
+            disabled={runningAll || !selectedBrandId}
+            onClick={() => void handleRunPromptsNow()}
+          >
+            <Zap className="mr-2 h-4 w-4" />
+            {runningAll ? "Running prompts…" : "Run Prompts Now"}
+          </Button>
           <Button size="sm" variant="secondary" onClick={() => setRunModalOpen(true)}>
-            Run prompts
+            Quick run
           </Button>
           <Button
             size="sm"

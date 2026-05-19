@@ -1010,6 +1010,126 @@ export interface Database {
         }>;
         Relationships: [];
       };
+      chat_responses: {
+        Row: {
+          id: string;
+          brand_id: string;
+          prompt_id: string;
+          ai_model: string;
+          prompt_text: string;
+          response_text: string;
+          raw_sources: unknown;
+          error_message: string | null;
+          status: string | null;
+          tokens_used: number | null;
+          run_date: string;
+          created_at: string | null;
+        };
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
+      chat_analysis: {
+        Row: {
+          id: string;
+          chat_response_id: string;
+          brand_id: string;
+          prompt_id: string;
+          ai_model: string;
+          run_date: string;
+          brand_mentioned: boolean | null;
+          brand_position: number | null;
+          brand_sentiment: number | null;
+          brand_sentiment_label: string | null;
+          brand_mention_context: string | null;
+          all_brands_mentioned: unknown;
+          sources_used: unknown;
+          analyzed_by: string | null;
+          analyzer_version: string | null;
+          created_at: string | null;
+        };
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
+      brand_daily_metrics: {
+        Row: {
+          id: string;
+          brand_id: string;
+          ai_model: string;
+          metric_date: string;
+          total_chats: number | null;
+          brand_mentions: number | null;
+          visibility_pct: number | null;
+          avg_position: number | null;
+          avg_sentiment: number | null;
+          positive_mentions: number | null;
+          neutral_mentions: number | null;
+          negative_mentions: number | null;
+          share_of_voice: number | null;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
+      source_appearances: {
+        Row: {
+          id: string;
+          brand_id: string;
+          chat_response_id: string | null;
+          prompt_id: string | null;
+          ai_model: string;
+          domain: string;
+          url: string | null;
+          was_cited: boolean | null;
+          was_used: boolean | null;
+          run_date: string;
+          created_at: string | null;
+        };
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
+      ai_recommendations: {
+        Row: {
+          id: string;
+          brand_id: string;
+          recommendation_type: string;
+          title: string;
+          description: string;
+          action_items: unknown;
+          priority: string | null;
+          impact_score: number | null;
+          status: string | null;
+          related_data: unknown;
+          created_at: string | null;
+          updated_at: string | null;
+        };
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
+      prompt_run_jobs: {
+        Row: {
+          id: string;
+          brand_id: string;
+          job_type: string;
+          status: string | null;
+          total_prompts: number | null;
+          completed_prompts: number | null;
+          failed_prompts: number | null;
+          triggered_by: string | null;
+          started_at: string | null;
+          completed_at: string | null;
+          error_details: unknown;
+          created_at: string | null;
+        };
+        Insert: Record<string, unknown>;
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;

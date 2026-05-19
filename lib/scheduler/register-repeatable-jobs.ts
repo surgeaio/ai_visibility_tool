@@ -3,6 +3,7 @@ import type { PlatformSchedulerJobName } from "@/lib/queues/types";
 
 const SCHEDULERS: { name: PlatformSchedulerJobName; pattern: string }[] = [
   { name: "prompt-schedules", pattern: "0 * * * *" },
+  { name: "visibility-daily-run", pattern: "0 3 * * *" },
   { name: "gsc-sync", pattern: "0 6 * * *" },
 ];
 
