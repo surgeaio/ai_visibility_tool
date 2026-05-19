@@ -1,275 +1,231 @@
 "use client";
 
-import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
+import { Download } from "lucide-react";
 import { RunPromptsModal } from "./_components/RunPromptsModal";
-import { PlatformComparisonChart } from "@/components/charts/PlatformComparisonChart";
-import { VisibilityTrendChart } from "@/components/charts/VisibilityTrendChart";
-import { Badge } from "@/components/ui/badge";
+import { LLMVisibilityFilters } from "@/components/llm-visibility/LLMVisibilityFilters";
+import { VisibilityCharts } from "@/components/llm-visibility/VisibilityCharts";
+import { BrandPerformanceByDate } from "@/components/llm-visibility/BrandPerformanceTable";
+import { BrandPerformanceByModel } from "@/components/llm-visibility/BrandByModelTable";
+import { PromptPerformanceTable } from "@/components/llm-visibility/PromptPerformanceTable";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import type { LlmVisibilityPayload } from "@/lib/types/llm-visibility";
+import type { LlmVisibilityDashboardResponse } from "@/lib/types/llm-visibility-dashboard";
 import { useSelectedBrand } from "@/lib/context/brand-context";
-import { useDashboardStore } from "@/store/dashboard";
 
-type ApiLlmResponse = {
-  source: "demo" | "live";
-  data: LlmVisibilityPayload;
-  requestId?: string;
+const EMPTY_DASHBOARD: LlmVisibilityDashboardResponse = {
+  empty: true,
+  chartData: [],
+  brands: [],
+  availableBrands: [],
+  availableModels: [],
+  byDate: [],
+  byModel: {},
+  prompts: [],
+  promptPerformance: null,
 };
 
-function sentimentLabel(s: "positive" | "neutral" | "negative") {
-  if (s === "positive") return { text: "Positive", emoji: "😊" };
-  if (s === "negative") return { text: "Needs work", emoji: "😟" };
-  return { text: "Neutral", emoji: "😐" };
-}
-
-export default function LlmVisibilityPage() {
+export default function LLMVisibilityPage() {
   const { selectedBrandId } = useSelectedBrand();
-  const brandName = useDashboardStore((s) => s.brandName);
-  const [range, setRange] = useState<"7d" | "30d" | "90d">("30d");
-  const [loading, setLoading] = useState(true);
+
+  const [dateRange, setDateRange] = useState("7d");
+  const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>([]);
+  const [selectedModels, setSelectedModels] = useState<string[]>([]);
+  const [selectedPrompts, setSelectedPrompts] = useState<string[]>([]);
+  const [focusPromptId, setFocusPromptId] = useState<string | null>(null);
+
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [source, setSource] = useState<"demo" | "live" | null>(null);
-  const [payload, setPayload] = useState<LlmVisibilityPayload | null>(null);
+  const [data, setData] = useState<LlmVisibilityDashboardResponse>(EMPTY_DASHBOARD);
   const [runModalOpen, setRunModalOpen] = useState(false);
 
-  const load = useCallback(async () => {
-    if (!selectedBrandId) return;
+  const fetchAllData = useCallback(async () => {
+    if (!selectedBrandId) {
+      setData(EMPTY_DASHBOARD);
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
-      const params = new URLSearchParams({ brandId: selectedBrandId, range });
+      const params = new URLSearchParams({
+        brandId: selectedBrandId,
+        range: dateRange,
+      });
+      if (selectedBrandIds.length) {
+        params.set("brandIds", selectedBrandIds.join(","));
+      }
+      if (selectedModels.length) {
+        params.set("models", selectedModels.join(","));
+      }
+      if (selectedPrompts.length) {
+        params.set("promptIds", selectedPrompts.join(","));
+      }
+      if (focusPromptId) {
+        params.set("focusPromptId", focusPromptId);
+      }
+
       const res = await fetch(`/api/llm-visibility?${params.toString()}`, { cache: "no-store" });
-      const json = (await res.json()) as ApiLlmResponse & { error?: string };
+      const json = (await res.json()) as LlmVisibilityDashboardResponse & { error?: string };
       if (!res.ok) {
         throw new Error(json.error ?? "Failed to load LLM visibility");
       }
-      setSource(json.source);
-      setPayload(json.data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Something went wrong");
-      setPayload(null);
+
+      setData(json);
+    } catch (err) {
+      console.error("Failed to fetch LLM visibility data:", err);
+      setError(err instanceof Error ? err.message : "Failed to load data");
+      setData(EMPTY_DASHBOARD);
     } finally {
       setLoading(false);
     }
-  }, [range, selectedBrandId]);
+  }, [
+    selectedBrandId,
+    dateRange,
+    selectedBrandIds,
+    selectedModels,
+    selectedPrompts,
+    focusPromptId,
+  ]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!selectedBrandId) return;
+    setSelectedBrandIds([selectedBrandId]);
+    setSelectedModels([]);
+    setSelectedPrompts([]);
+    setFocusPromptId(null);
+  }, [selectedBrandId]);
 
-  const overall =
-    payload?.overall ??
-    (payload?.platformScores?.length
-      ? Math.round(
-          payload.platformScores.reduce((a, p) => a + p.score, 0) / payload.platformScores.length,
-        )
-      : null);
+  useEffect(() => {
+    if (data.availableModels.length > 0 && selectedModels.length === 0) {
+      setSelectedModels(data.availableModels.map((m) => m.slug));
+    }
+  }, [data.availableModels, selectedModels.length]);
 
-  const barData = (payload?.platformScores ?? []).map((p) => ({ name: p.platform, score: p.score }));
-  const topPrompts = [...(payload?.topPrompts ?? [])].slice(0, 5);
-  const needsAttention = payload?.needsAttention ?? [];
-  const trend = payload?.trend ?? [];
+  useEffect(() => {
+    void fetchAllData();
+  }, [fetchAllData]);
+
+  useEffect(() => {
+    if (!focusPromptId && data.prompts[0]) {
+      setFocusPromptId(data.prompts[0].id);
+    }
+  }, [data.prompts, focusPromptId]);
+
+  async function handleDownloadReport() {
+    if (!selectedBrandId) return;
+    const params = new URLSearchParams({
+      brandId: selectedBrandId,
+      range: dateRange,
+    });
+    if (selectedBrandIds.length) params.set("brandIds", selectedBrandIds.join(","));
+    if (selectedModels.length) params.set("models", selectedModels.join(","));
+    if (selectedPrompts.length) params.set("promptIds", selectedPrompts.join(","));
+    if (focusPromptId) params.set("focusPromptId", focusPromptId);
+
+    const res = await fetch(`/api/llm-visibility/export?${params.toString()}`);
+    if (!res.ok) return;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `llm-visibility-${selectedBrandId}-${dateRange}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  const promptLabel =
+    data.promptPerformance?.prompt ??
+    data.prompts.find((p) => p.id === focusPromptId)?.prompt ??
+    "";
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-wrap items-end justify-between gap-4">
+    <div className="space-y-0">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h2 className="text-lg font-semibold text-white">LLM visibility</h2>
-          <p className="text-sm text-neutral-500">
-            Where AI assistants mention your brand, and how strong those mentions feel.
-          </p>
+          <h2 className="text-2xl font-bold text-white">LLM Visibility</h2>
+          <p className="mt-1 text-sm text-neutral-500">Where AI assistants mention your brand</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            className="rounded-md border border-[#262626] bg-[#111] px-2 py-1.5 text-sm text-white"
-            value={range}
-            onChange={(e) => setRange(e.target.value as "7d" | "30d" | "90d")}
-            aria-label="Date range"
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={() => setRunModalOpen(true)}>
+            Run prompts
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            className="gap-2"
+            onClick={() => void handleDownloadReport()}
+            disabled={!selectedBrandId || loading}
           >
-            <option value="7d">Last 7 days</option>
-            <option value="30d">Last 30 days</option>
-            <option value="90d">Last 90 days</option>
-          </select>
-          {source ? (
-            <Badge variant="secondary" className="font-mono text-xs">
-              {source === "demo" ? "Demo data" : "Live data"}
-            </Badge>
-          ) : null}
-          <Button size="sm" onClick={() => setRunModalOpen(true)}>
-            Run prompts now
+            <Download className="h-4 w-4" />
+            Download Report
           </Button>
         </div>
       </div>
 
-      {loading ? (
-        <p className="text-sm text-neutral-500">Loading visibility…</p>
-      ) : error ? (
-        <Card className="border-red-900/50 bg-[#111]">
-          <CardContent className="p-6 text-sm text-red-300">{error}</CardContent>
-        </Card>
-      ) : payload?.empty ? (
-        <Card className="border-[#262626] bg-[#111]">
-          <CardHeader>
-            <CardTitle className="text-base text-white">No LLM checks yet</CardTitle>
-            <p className="text-sm text-neutral-500">
-              Run prompts to populate scores and sentiment across AI assistants.
-            </p>
-            <p className="mt-1 text-xs text-neutral-600">
-              Selected brand:{" "}
-              <span className="text-neutral-400">{brandName || selectedBrandId || "none"}</span>
-              {" · "}
-              Date range: <span className="text-neutral-400">{range}</span>
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-3">
-              <Button asChild size="sm" variant="secondary">
-                <Link href="/dashboard/prompts">Go to prompts</Link>
-              </Button>
-              <Button size="sm" onClick={() => setRunModalOpen(true)}>
+      {!selectedBrandId ? (
+        <div className="rounded-xl border border-[#262626] bg-[#111] px-6 py-12 text-center">
+          <p className="text-neutral-400">Select a client from the sidebar to view LLM visibility.</p>
+        </div>
+      ) : (
+        <>
+          <LLMVisibilityFilters
+            dateRange={dateRange}
+            setDateRange={setDateRange}
+            selectedBrandIds={selectedBrandIds}
+            setSelectedBrandIds={setSelectedBrandIds}
+            selectedModels={selectedModels}
+            setSelectedModels={setSelectedModels}
+            selectedPrompts={selectedPrompts}
+            setSelectedPrompts={setSelectedPrompts}
+            availableBrands={data.availableBrands}
+            availableModels={data.availableModels}
+            prompts={data.prompts}
+          />
+
+          {error ? (
+            <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-100">
+              {error}
+            </div>
+          ) : null}
+
+          {loading ? (
+            <div className="flex h-64 items-center justify-center">
+              <p className="text-neutral-500">Loading visibility data…</p>
+            </div>
+          ) : data.empty ? (
+            <div className="rounded-xl border border-[#262626] bg-[#111] px-6 py-12 text-center">
+              <p className="font-medium text-white">No LLM visibility data yet</p>
+              <p className="mt-2 text-sm text-neutral-500">
+                Run prompts for this client to populate charts and tables.
+              </p>
+              <Button className="mt-4" size="sm" onClick={() => setRunModalOpen(true)}>
                 Run prompts now
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      ) : (
-        <>
-          <Card className="border-[#262626] bg-[#111]">
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base text-white">Overall score</CardTitle>
-              <p className="text-sm text-neutral-500">
-                Average visibility across tracked assistants in this range.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <p className="font-mono text-4xl font-semibold text-white">
-                {overall != null ? overall : "—"}
-                {overall != null ? <span className="text-lg text-neutral-500">/100</span> : null}
-              </p>
-              <p className="mt-1 text-sm text-neutral-500">
-                {source === "demo" ? "Demo trend story — connect keys for live numbers." : "Based on stored runs."}
-              </p>
-            </CardContent>
-          </Card>
-
-          <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            {(payload?.platformScores ?? []).map((p) => {
-              const s = sentimentLabel(p.sentiment);
-              return (
-                <Card key={p.platform} className="border-[#262626] bg-[#111]">
-                  <CardHeader className="pb-2">
-                    <CardTitle className="text-sm font-medium text-neutral-400">{p.platform}</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <p className="font-mono text-2xl text-white">{p.score}/100</p>
-                    <p className="text-sm text-neutral-400">
-                      {s.emoji} {s.text}
-                    </p>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
-
-          <div className="grid min-w-0 gap-6 xl:grid-cols-2">
-            <Card className="min-w-0 border-[#262626] bg-[#111] p-6">
-              <CardHeader className="px-0 pt-0">
-                <CardTitle className="text-base text-white">Visibility trend</CardTitle>
-                <p className="text-sm text-neutral-500">Daily highs per assistant (when history exists).</p>
-              </CardHeader>
-              <VisibilityTrendChart data={trend} />
-            </Card>
-            <Card className="min-w-0 border-[#262626] bg-[#111] p-6">
-              <CardHeader className="px-0 pt-0">
-                <CardTitle className="text-base text-white">Compare platforms</CardTitle>
-                <p className="text-sm text-neutral-500">Scores from 0 (invisible) to 100 (strong presence).</p>
-              </CardHeader>
-              <PlatformComparisonChart data={barData} />
-            </Card>
-          </div>
-
-          <div className="grid gap-6 xl:grid-cols-2">
-            <Card className="border-[#262626] bg-[#111]">
-              <CardHeader>
-                <CardTitle className="text-base text-white">Top prompts</CardTitle>
-                <p className="text-sm text-neutral-500">Highest average visibility score in this range.</p>
-              </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b border-[#262626] text-xs uppercase text-neutral-500">
-                    <tr>
-                      <th className="p-3">Prompt</th>
-                      <th className="p-3">Avg score</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#262626]">
-                    {topPrompts.map((p) => (
-                      <tr key={p.id}>
-                        <td className="p-3">
-                          <Link
-                            href={`/dashboard/llm-visibility/${p.id}`}
-                            className="text-white underline-offset-2 hover:underline"
-                          >
-                            {p.text}
-                          </Link>
-                        </td>
-                        <td className="p-3 font-mono text-neutral-300">{p.avgScore ?? "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-
-            <Card className="border-[#262626] bg-[#111]">
-              <CardHeader>
-                <CardTitle className="text-base text-white">Needs attention</CardTitle>
-                <p className="text-sm text-neutral-500">Prompts that are weak or inconsistent across models.</p>
-              </CardHeader>
-              <CardContent className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b border-[#262626] text-xs uppercase text-neutral-500">
-                    <tr>
-                      <th className="p-3">Prompt</th>
-                      <th className="p-3">Issue</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-[#262626]">
-                    {needsAttention.length ? (
-                      needsAttention.map((p) => (
-                        <tr key={p.id}>
-                          <td className="p-3">
-                            <Link
-                              href={`/dashboard/llm-visibility/${p.id}`}
-                              className="text-white underline-offset-2 hover:underline"
-                            >
-                              {p.text}
-                            </Link>
-                          </td>
-                          <td className="p-3 text-neutral-400">{p.issue}</td>
-                        </tr>
-                      ))
-                    ) : (
-                      <tr>
-                        <td className="p-3 text-neutral-500" colSpan={2}>
-                          Nothing flagged — nice work.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </CardContent>
-            </Card>
-          </div>
+          ) : (
+            <>
+              <VisibilityCharts data={data.chartData} brands={data.brands} />
+              <BrandPerformanceByDate data={data.byDate} brands={data.brands} />
+              <BrandPerformanceByModel data={data.byModel} brands={data.brands} />
+              {(data.promptPerformance || data.prompts.length > 0) && (
+                <PromptPerformanceTable
+                  promptData={data.promptPerformance}
+                  selectedPrompt={promptLabel}
+                  prompts={data.prompts}
+                  onSelectPrompt={(id) => {
+                    setFocusPromptId(id);
+                  }}
+                />
+              )}
+            </>
+          )}
         </>
       )}
 
       <RunPromptsModal
         open={runModalOpen}
         onClose={() => setRunModalOpen(false)}
-        onSuccess={() => void load()}
+        onSuccess={() => void fetchAllData()}
       />
     </div>
   );
