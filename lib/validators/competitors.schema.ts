@@ -19,16 +19,23 @@ export const updateCompetitorSchema = createCompetitorSchema
   });
 
 export const listCompetitorsQuerySchema = paginationSchema.extend({
-  brandId: uuidSchema.optional(),
+  brandId: uuidSchema,
   isTracked: z.coerce.boolean().optional(),
   search: z.string().trim().min(1).max(100).optional(),
   sortBy: z.enum(["name", "created_at"]).default("created_at"),
   sortOrder: sortOrderSchema.default("desc"),
 });
 
-/** Compatibility schema for current POST /api/competitors payload. */
+export const deleteCompetitorQuerySchema = z.object({
+  id: uuidSchema,
+  brandId: uuidSchema,
+});
+
+/** POST /api/competitors */
 export const createCompetitorApiSchema = z.object({
+  brandId: uuidSchema,
   name: z.string().trim().min(2).max(120),
+  domain: domainSchema.optional(),
 });
 
 export type CreateCompetitorInput = z.infer<typeof createCompetitorSchema>;

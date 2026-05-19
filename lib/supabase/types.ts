@@ -40,6 +40,8 @@ export type CompetitorRow = {
   id: string;
   brand_id: string;
   competitor_name: string;
+  domain: string | null;
+  website: string | null;
   created_at: string;
 };
 

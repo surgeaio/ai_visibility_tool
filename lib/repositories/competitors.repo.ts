@@ -6,28 +6,32 @@ import { DatabaseError } from "@/lib/repositories/errors";
 export interface CompetitorEntity {
   id: string;
   name: string;
-  visibility: number;
-  sentiment: number;
-  position: number;
+  domain: string | null;
+  visibility: number | null;
+  sentiment: number | null;
+  position: number | null;
   trend: "up" | "down" | "neutral";
 }
 
 export interface CompetitorCreateInput {
   name: string;
-  brandId?: string;
+  brandId: string;
+  domain?: string;
 }
 
 export interface CompetitorUpdateInput {
   name?: string;
+  domain?: string;
 }
 
 function toCompetitorEntity(row: CompetitorRow): CompetitorEntity {
   return {
     id: row.id,
     name: row.competitor_name,
-    visibility: 0,
-    sentiment: 50,
-    position: 0,
+    domain: row.domain ?? null,
+    visibility: null,
+    sentiment: null,
+    position: null,
     trend: "neutral",
   };
 }
@@ -37,13 +41,14 @@ export class CompetitorsRepository extends BaseRepository<
   CompetitorCreateInput,
   CompetitorUpdateInput
 > {
-  async findById(id: string): Promise<CompetitorEntity | null> {
+  async findById(id: string, brandId?: string): Promise<CompetitorEntity | null> {
     if (this.isDemoMode()) {
       const found = DEMO_COMPETITORS.find((item) => item.id === id || item.name === id);
       return found
         ? {
             id: found.id,
             name: found.name,
+            domain: null,
             visibility: found.visibility,
             sentiment: found.sentiment,
             position: found.position,
@@ -52,11 +57,9 @@ export class CompetitorsRepository extends BaseRepository<
         : null;
     }
     const supabase = await this.getClient();
-    const { data, error } = await supabase
-      .from("competitors")
-      .select("*")
-      .eq("id", id)
-      .maybeSingle();
+    let query = supabase.from("competitors").select("*").eq("id", id);
+    if (brandId) query = query.eq("brand_id", brandId);
+    const { data, error } = await query.maybeSingle();
     if (error) throw new DatabaseError(error.message);
     if (!data) return null;
     return toCompetitorEntity(data as CompetitorRow);
@@ -67,14 +70,19 @@ export class CompetitorsRepository extends BaseRepository<
     const offset = options.pagination?.offset ?? 0;
     const sortOrder = options.sortOrder ?? "desc";
 
+    const brandId = options.filters?.brandId ? String(options.filters.brandId) : null;
+    if (!brandId) {
+      return { items: [], total: 0 };
+    }
+
     if (this.isDemoMode()) {
-      const filtered = DEMO_COMPETITORS
-        .filter((item) =>
-          options.search ? item.name.toLowerCase().includes(options.search.toLowerCase()) : true,
-        )
+      const filtered = DEMO_COMPETITORS.filter((item) =>
+        options.search ? item.name.toLowerCase().includes(options.search.toLowerCase()) : true,
+      )
         .map((item) => ({
           id: item.id,
           name: item.name,
+          domain: null,
           visibility: item.visibility,
           sentiment: item.sentiment,
           position: item.position,
@@ -90,12 +98,10 @@ export class CompetitorsRepository extends BaseRepository<
     let query = supabase
       .from("competitors")
       .select("*", { count: "exact" })
+      .eq("brand_id", brandId)
       .range(offset, offset + limit - 1)
       .order("created_at", { ascending: sortOrder === "asc" });
     if (options.search) query = query.ilike("competitor_name", `%${options.search}%`);
-    if (options.filters?.brandId) {
-      query = query.eq("brand_id", String(options.filters.brandId));
-    }
     const { data, error, count } = await query;
     if (error) throw new DatabaseError(error.message);
     const rows = (data ?? []) as CompetitorRow[];
@@ -103,10 +109,15 @@ export class CompetitorsRepository extends BaseRepository<
   }
 
   async create(input: CompetitorCreateInput): Promise<CompetitorEntity> {
+    if (!input.brandId) {
+      throw new DatabaseError("brandId is required");
+    }
+
     if (this.isDemoMode()) {
       const created: CompetitorEntity = {
         id: crypto.randomUUID(),
         name: input.name,
+        domain: input.domain ?? null,
         visibility: 42,
         sentiment: 58,
         position: 3.2,
@@ -115,36 +126,29 @@ export class CompetitorsRepository extends BaseRepository<
       DEMO_COMPETITORS.push({
         id: created.id,
         name: created.name,
-        visibility: created.visibility,
-        sentiment: created.sentiment,
-        position: created.position,
+        visibility: created.visibility ?? 0,
+        sentiment: created.sentiment ?? 0,
+        position: created.position ?? 0,
         trend: created.trend,
       });
       return created;
     }
 
     const supabase = await this.getClient();
-    let brandId = input.brandId;
-    if (!brandId) {
-      const { data: firstBrand, error: brandError } = await supabase
-        .from("brands")
-        .select("id")
-        .limit(1)
-        .maybeSingle();
-      if (brandError) throw new DatabaseError(brandError.message);
-      brandId = firstBrand?.id;
-    }
-    if (!brandId) throw new DatabaseError("No brand available for competitor creation");
     const { data, error } = await supabase
       .from("competitors")
-      .insert({ brand_id: brandId, competitor_name: input.name })
+      .insert({
+        brand_id: input.brandId,
+        competitor_name: input.name,
+        domain: input.domain ?? null,
+      })
       .select("*")
       .single();
     if (error) throw new DatabaseError(error.message);
     return toCompetitorEntity(data as CompetitorRow);
   }
 
-  async update(id: string, input: CompetitorUpdateInput): Promise<CompetitorEntity> {
+  async update(id: string, input: CompetitorUpdateInput, brandId?: string): Promise<CompetitorEntity> {
     if (this.isDemoMode()) {
       const index = DEMO_COMPETITORS.findIndex((item) => item.id === id || item.name === id);
       if (index === -1) throw new DatabaseError("Competitor not found");
@@ -156,6 +160,7 @@ export class CompetitorsRepository extends BaseRepository<
       return {
         id: updated.id,
         name: updated.name,
+        domain: input.domain ?? null,
         visibility: updated.visibility,
         sentiment: updated.sentiment,
         position: updated.position,
@@ -163,17 +168,20 @@ export class CompetitorsRepository extends BaseRepository<
       };
     }
     const supabase = await this.getClient();
-    const { data, error } = await supabase
+    let query = supabase
       .from("competitors")
-      .update({ competitor_name: input.name })
-      .eq("id", id)
-      .select("*")
-      .single();
+      .update({
+        competitor_name: input.name,
+        domain: input.domain,
+      })
+      .eq("id", id);
+    if (brandId) query = query.eq("brand_id", brandId);
+    const { data, error } = await query.select("*").single();
     if (error) throw new DatabaseError(error.message);
     return toCompetitorEntity(data as CompetitorRow);
   }
 
-  async delete(id: string): Promise<boolean> {
+  async delete(id: string, brandId?: string): Promise<boolean> {
     if (this.isDemoMode()) {
       const index = DEMO_COMPETITORS.findIndex((item) => item.id === id || item.name === id);
       if (index === -1) return false;
@@ -181,7 +189,9 @@ export class CompetitorsRepository extends BaseRepository<
       return true;
     }
     const supabase = await this.getClient();
-    const { error } = await supabase.from("competitors").delete().eq("id", id);
+    let query = supabase.from("competitors").delete().eq("id", id);
+    if (brandId) query = query.eq("brand_id", brandId);
+    const { error } = await query;
     if (error) throw new DatabaseError(error.message);
     return true;
   }
