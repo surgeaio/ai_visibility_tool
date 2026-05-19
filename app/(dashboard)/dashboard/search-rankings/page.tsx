@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { runGscSyncForBrand } from "@/lib/client/gsc-sync";
 import { useSelectedBrand } from "@/lib/context/brand-context";
+import { CompetitorCards } from "./_components/CompetitorCards";
 
 type RankingRow = {
   query: string;
@@ -149,6 +150,8 @@ export default function SearchRankingsPage() {
           {syncBusy ? "Syncing…" : "Re-sync GSC data"}
         </Button>
       </div>
+
+      <CompetitorCards />
 
       <Tabs defaultValue="rankings">
         <TabsList className="border border-[#262626] bg-[#111]">
