@@ -124,6 +124,7 @@ export default function LLMVisibilityPage() {
       });
       const json = (await res.json()) as {
         success?: boolean;
+        queued?: boolean;
         completed?: number;
         failed?: number;
         error?: string;
@@ -132,8 +133,12 @@ export default function LLMVisibilityPage() {
       if (!res.ok || !json.success) {
         throw new Error(json.error ?? json.message ?? "Run failed");
       }
-      toast.success(`Completed ${json.completed ?? 0} prompts (${json.failed ?? 0} failed).`);
-      await fetchAllData();
+      if (json.queued) {
+        toast.success(json.message ?? "Prompts queued. Results in 2–3 minutes.");
+      } else {
+        toast.success(`Completed ${json.completed ?? 0} prompts (${json.failed ?? 0} failed).`);
+        await fetchAllData();
+      }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to run prompts");
     } finally {

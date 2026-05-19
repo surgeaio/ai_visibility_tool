@@ -1,60 +1,52 @@
-import IORedis from "ioredis";
+import IORedis, { type RedisOptions } from "ioredis";
 import { getEnv } from "@/lib/env";
 
 let redisClient: IORedis | null | undefined;
 
-function createClient() {
+function resolveRedisUrl(): string | null {
   const env = getEnv();
   const redisUrl = env.REDIS_URL ?? env.UPSTASH_REDIS_URL;
-  if (!redisUrl) return null;
+  if (!redisUrl?.trim()) return null;
 
   if (redisUrl.includes("upstash.io") && env.UPSTASH_REDIS_TOKEN) {
     const url = new URL(redisUrl);
     url.username = "default";
     url.password = env.UPSTASH_REDIS_TOKEN;
-    return new IORedis(url.toString(), {
-      maxRetriesPerRequest: 2,
-      lazyConnect: true,
-      enableReadyCheck: false,
-    });
+    return url.toString();
   }
 
-  return new IORedis(redisUrl, {
-    maxRetriesPerRequest: 2,
+  return redisUrl.trim();
+}
+
+function connectionOptions(maxRetriesPerRequest: number | null): RedisOptions {
+  const redisUrl = resolveRedisUrl();
+  const useTls = Boolean(redisUrl?.startsWith("rediss://"));
+
+  return {
+    maxRetriesPerRequest,
     lazyConnect: true,
     enableReadyCheck: false,
-  });
+    ...(useTls ? { tls: { rejectUnauthorized: false } } : {}),
+  };
+}
+
+function createClientInstance(maxRetriesPerRequest: number | null): IORedis | null {
+  const redisUrl = resolveRedisUrl();
+  if (!redisUrl) return null;
+  return new IORedis(redisUrl, connectionOptions(maxRetriesPerRequest));
+}
+
+/** General-purpose Redis client (short-lived commands, rate limiting). */
+export function getRedisClient() {
+  if (redisClient === undefined) {
+    redisClient = createClientInstance(2);
+  }
+  return redisClient ?? null;
 }
 
 /** Dedicated connection for BullMQ (requires `maxRetriesPerRequest: null`). */
 export function createBullMQConnection(): IORedis | null {
-  const env = getEnv();
-  const redisUrl = env.REDIS_URL ?? env.UPSTASH_REDIS_URL;
-  if (!redisUrl) return null;
-
-  if (redisUrl.includes("upstash.io") && env.UPSTASH_REDIS_TOKEN) {
-    const url = new URL(redisUrl);
-    url.username = "default";
-    url.password = env.UPSTASH_REDIS_TOKEN;
-    return new IORedis(url.toString(), {
-      maxRetriesPerRequest: null,
-      lazyConnect: true,
-      enableReadyCheck: false,
-    });
-  }
-
-  return new IORedis(redisUrl, {
-    maxRetriesPerRequest: null,
-    lazyConnect: true,
-    enableReadyCheck: false,
-  });
-}
-
-export function getRedisClient() {
-  if (redisClient === undefined) {
-    redisClient = createClient();
-  }
-  return redisClient ?? null;
+  return createClientInstance(null);
 }
 
 export async function pingRedis(): Promise<boolean> {
@@ -73,6 +65,5 @@ export async function pingRedis(): Promise<boolean> {
 
 /** True when a Redis TCP URL is configured (BullMQ may still fail to connect). */
 export function isRedisAvailable(): boolean {
-  const url = process.env.REDIS_URL ?? process.env.UPSTASH_REDIS_URL;
-  return Boolean(url?.trim());
+  return Boolean(resolveRedisUrl());
 }

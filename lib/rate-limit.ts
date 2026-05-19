@@ -1,28 +1,29 @@
 import { Ratelimit } from "@upstash/ratelimit";
 import { Redis } from "@upstash/redis";
+import { getRedisClient, isRedisAvailable } from "@/lib/redis/client";
 
 const WINDOW_MS = 60_000;
 const MAX = 10;
 
 const memory = new Map<string, number[]>();
 let warnedMemory = false;
-let ratelimit: Ratelimit | null | undefined;
+let upstashRatelimit: Ratelimit | null | undefined;
 
 function getUpstashRatelimit(): Ratelimit | null {
-  if (ratelimit !== undefined) return ratelimit;
+  if (upstashRatelimit !== undefined) return upstashRatelimit;
   const url = process.env.UPSTASH_REDIS_REST_URL?.trim();
   const token = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
   if (!url || !token) {
-    ratelimit = null;
+    upstashRatelimit = null;
     return null;
   }
   const redis = new Redis({ url, token });
-  ratelimit = new Ratelimit({
+  upstashRatelimit = new Ratelimit({
     redis,
     limiter: Ratelimit.slidingWindow(MAX, "60 s"),
     prefix: "ai-visibility",
   });
-  return ratelimit;
+  return upstashRatelimit;
 }
 
 function memoryRateLimit(key: string): { ok: boolean; retryAfter?: number } {
@@ -38,9 +39,34 @@ function memoryRateLimit(key: string): { ok: boolean; retryAfter?: number } {
   return { ok: true };
 }
 
+async function ioredisRateLimit(key: string): Promise<{ ok: boolean; retryAfter?: number }> {
+  const client = getRedisClient();
+  if (!client) return memoryRateLimit(key);
+
+  const redisKey = `ai-visibility:rl:${key}`;
+  try {
+    if (client.status === "wait") {
+      await client.connect();
+    }
+    const count = await client.incr(redisKey);
+    if (count === 1) {
+      await client.pexpire(redisKey, WINDOW_MS);
+    }
+    if (count > MAX) {
+      const ttl = await client.pttl(redisKey);
+      return {
+        ok: false,
+        retryAfter: Math.max(1, Math.ceil((ttl > 0 ? ttl : WINDOW_MS) / 1000)),
+      };
+    }
+    return { ok: true };
+  } catch {
+    return memoryRateLimit(key);
+  }
+}
+
 /**
- * Distributed rate limit when `UPSTASH_REDIS_REST_URL` + `UPSTASH_REDIS_REST_TOKEN` are set (Upstash REST API).
- * Falls back to in-memory sliding window (not safe across serverless instances).
+ * Distributed rate limit via Railway/Redis TCP (`REDIS_URL`), legacy Upstash REST, or in-memory fallback.
  */
 export async function rateLimit(key: string): Promise<{ ok: boolean; retryAfter?: number }> {
   const rl = getUpstashRatelimit();
@@ -52,10 +78,13 @@ export async function rateLimit(key: string): Promise<{ ok: boolean; retryAfter?
     }
     return { ok: true };
   }
+
+  if (isRedisAvailable()) {
+    return ioredisRateLimit(key);
+  }
+
   if (process.env.NODE_ENV === "production" && !warnedMemory) {
-    console.warn(
-      "[rate-limit] Set UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN (Upstash REST) for distributed limits.",
-    );
+    console.warn("[rate-limit] Set REDIS_URL for distributed limits across serverless instances.");
     warnedMemory = true;
   }
   return memoryRateLimit(key);

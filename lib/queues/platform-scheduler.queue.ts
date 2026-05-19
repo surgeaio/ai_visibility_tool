@@ -1,5 +1,6 @@
 import { Queue } from "bullmq";
 import { createBullMQConnection } from "@/lib/redis/client";
+import { withQueueDefaults } from "@/lib/redis/bullmq-options";
 import { PLATFORM_SCHEDULER_QUEUE_NAME } from "@/lib/queues/queue-names";
 import type { PlatformSchedulerJobName } from "@/lib/queues/types";
 
@@ -15,9 +16,10 @@ export function getPlatformSchedulerQueue(): Queue<
   if (queue === undefined) {
     const connection = createBullMQConnection();
     queue = connection
-      ? new Queue<unknown, unknown, PlatformSchedulerJobName>(PLATFORM_SCHEDULER_QUEUE_NAME, {
-          connection,
-        })
+      ? new Queue<unknown, unknown, PlatformSchedulerJobName>(
+          PLATFORM_SCHEDULER_QUEUE_NAME,
+          withQueueDefaults({ connection }),
+        )
       : null;
   }
   return queue;

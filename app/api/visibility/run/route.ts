@@ -2,8 +2,10 @@ export const dynamic = "force-dynamic";
 
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId } from "@/lib/api/validate";
+import { getVisibilityRunQueue } from "@/lib/queues/visibility-run.queue";
 import { runAllPromptsForBrand } from "@/lib/services/visibility-orchestrator";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { isRedisAvailable } from "@/lib/redis/client";
 
 export const maxDuration = 300;
 
@@ -33,8 +35,24 @@ export async function POST(req: Request) {
       return Response.json({ error: "Brand not found", requestId }, { status: 404 });
     }
 
+    const queue = getVisibilityRunQueue();
+    if (queue && isRedisAvailable()) {
+      const job = await queue.add(
+        "run-brand-prompts",
+        { brandId, userId, triggeredBy: "manual" },
+        { removeOnComplete: 10, removeOnFail: 5 },
+      );
+      return Response.json({
+        success: true,
+        queued: true,
+        jobId: job.id,
+        message: "Prompts queued. Results in 2–3 minutes.",
+        requestId,
+      });
+    }
+
     const result = await runAllPromptsForBrand(brandId, "manual", userId);
-    return Response.json({ success: true, ...result, requestId });
+    return Response.json({ success: true, queued: false, ...result, requestId });
   } catch (err) {
     console.error("[/api/visibility/run]", err);
     return Response.json(

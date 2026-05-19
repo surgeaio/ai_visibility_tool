@@ -59,3 +59,9 @@ export type PlatformSchedulerJobName =
   | "prompt-schedules"
   | "gsc-sync"
   | "visibility-daily-run";
+
+export interface VisibilityRunJobData {
+  brandId: string;
+  userId?: string;
+  triggeredBy?: "manual" | "scheduled" | "on_demand";
+}

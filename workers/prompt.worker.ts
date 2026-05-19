@@ -1,5 +1,6 @@
 import type IORedis from "ioredis";
 import { Worker } from "bullmq";
+import { withWorkerSettings } from "@/lib/redis/bullmq-options";
 import { PROMPT_EXECUTION_QUEUE_NAME } from "@/lib/queues/queue-names";
 import type { PromptExecutionJobData } from "@/lib/queues/types";
 import { executePromptExecutionJob } from "@/lib/services/llm-tracker";
@@ -16,7 +17,7 @@ export function registerPromptExecutionWorker(connection: IORedis) {
       });
       return { ok: true as const, promptId: job.data.promptId, resultsCount: results.length, errors };
     },
-    { connection, concurrency: 3 },
+    withWorkerSettings({ connection, concurrency: 2 }),
   );
   worker.on("failed", (job, err) => {
     console.error("[prompt-execution] failed", job?.id, err);

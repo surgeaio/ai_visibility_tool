@@ -1,5 +1,6 @@
 import type IORedis from "ioredis";
 import { Worker } from "bullmq";
+import { withWorkerSettings } from "@/lib/redis/bullmq-options";
 import { WEBSITE_CRAWL_QUEUE_NAME } from "@/lib/queues/queue-names";
 import type { WebsiteCrawlJobData } from "@/lib/queues/types";
 import { runWebsiteAuditSync } from "@/lib/services/website-audit-runner";
@@ -12,6 +13,6 @@ export function registerWebsiteCrawlWorker(connection: IORedis) {
       const result = await runWebsiteAuditSync({ brandId, siteUrl, maxPages });
       return { ok: true as const, ...result };
     },
-    { connection, concurrency: 1 },
+    withWorkerSettings({ connection, concurrency: 1 }),
   );
 }

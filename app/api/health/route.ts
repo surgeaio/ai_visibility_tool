@@ -1,9 +1,7 @@
 export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
-import { Redis } from "@upstash/redis";
 import { adminHasLlmProviders } from "@/lib/ai/admin-providers";
-import { getEnv } from "@/lib/env";
 import { isRedisAvailable, pingRedis } from "@/lib/redis/client";
 
 function checkEnv(): boolean {
@@ -29,27 +27,11 @@ async function checkSupabase(): Promise<boolean> {
   }
 }
 
-async function checkRedisRest(): Promise<boolean> {
-  const restUrl = process.env.UPSTASH_REDIS_REST_URL?.trim();
-  const restToken = process.env.UPSTASH_REDIS_REST_TOKEN?.trim();
-  if (!restUrl || !restToken) return false;
-  try {
-    const redis = new Redis({ url: restUrl, token: restToken });
-    const pong = await redis.ping();
-    return pong === "PONG";
-  } catch {
-    return false;
-  }
-}
-
 export async function GET() {
-  const env = getEnv();
   const envOk = checkEnv();
   const supabaseOk = await checkSupabase();
-  const redisRestOk = await checkRedisRest();
-  const redisTcpOk = await pingRedis();
   const redisConfigured = isRedisAvailable();
-  const redisConnected = redisRestOk || redisTcpOk;
+  const redisConnected = redisConfigured ? await pingRedis() : false;
 
   const providers = {
     openai: Boolean(process.env.OPENAI_API_KEY?.trim()),
@@ -79,9 +61,6 @@ export async function GET() {
     status,
     checks,
     timestamp: new Date().toISOString(),
-    redisConfigured: Boolean(env.REDIS_URL ?? env.UPSTASH_REDIS_URL),
-    redisRestConfigured: Boolean(
-      process.env.UPSTASH_REDIS_REST_URL?.trim() && process.env.UPSTASH_REDIS_REST_TOKEN?.trim(),
-    ),
+    redisConfigured,
   });
 }

@@ -1,5 +1,6 @@
 import type IORedis from "ioredis";
 import { Worker } from "bullmq";
+import { withWorkerSettings } from "@/lib/redis/bullmq-options";
 import { RECOMMENDATION_QUEUE_NAME } from "@/lib/queues/queue-names";
 import type { RecommendationJobData } from "@/lib/queues/types";
 import { RecommendationEngine } from "@/lib/services/recommendation-engine";
@@ -40,6 +41,6 @@ export function registerRecommendationWorker(connection: IORedis) {
       }
       return { ok: true as const, generated: recs.length };
     },
-    { connection, concurrency: 1 },
+    withWorkerSettings({ connection, concurrency: 1 }),
   );
 }

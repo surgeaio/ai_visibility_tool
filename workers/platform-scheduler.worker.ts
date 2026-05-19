@@ -1,5 +1,6 @@
 import type IORedis from "ioredis";
 import { Worker } from "bullmq";
+import { withWorkerSettings } from "@/lib/redis/bullmq-options";
 import { PLATFORM_SCHEDULER_QUEUE_NAME } from "@/lib/queues/queue-names";
 import type { PlatformSchedulerJobName } from "@/lib/queues/types";
 import { runDuePromptSchedules } from "@/lib/services/prompt-schedule-runner";
@@ -47,7 +48,7 @@ export function registerPlatformSchedulerWorker(connection: IORedis) {
       }
       throw new Error(`Unknown scheduler job: ${job.name}`);
     },
-    { connection, concurrency: 1 },
+    withWorkerSettings({ connection, concurrency: 1 }),
   );
 
   worker.on("failed", (job, err) => {

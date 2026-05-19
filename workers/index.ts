@@ -9,6 +9,7 @@ import { registerRecommendationWorker } from "./recommendation.worker";
 import { registerSentimentAnalysisWorker } from "./sentiment.worker";
 import { registerTrendWorker } from "./trend.worker";
 import { registerPlatformSchedulerWorker } from "./platform-scheduler.worker";
+import { registerVisibilityRunWorker } from "./visibility-run.worker";
 import { registerPlatformSchedulerJobs } from "@/lib/scheduler/register-repeatable-jobs";
 
 async function duplicateConnection(parent: IORedis): Promise<IORedis> {
@@ -22,7 +23,7 @@ async function duplicateConnection(parent: IORedis): Promise<IORedis> {
 async function main() {
   const base = createBullMQConnection();
   if (!base) {
-    console.warn("[workers] REDIS_URL / UPSTASH_REDIS_URL not set — workers exiting.");
+    console.warn("[workers] REDIS_URL not set — workers exiting.");
     process.exit(0);
   }
 
@@ -49,9 +50,12 @@ async function main() {
     registerWebsiteCrawlWorker(await dup(base)),
     registerSerperRankingWorker(await dup(base)),
     registerGscSyncWorker(await dup(base)),
+    registerVisibilityRunWorker(await dup(base)),
   ];
 
-  console.log("[workers] BullMQ workers running (scheduler: hourly prompt schedules, daily GSC sync).");
+  console.log(
+    "[workers] BullMQ workers running (prompt-schedules hourly, visibility-daily 3AM, gsc-sync 6AM).",
+  );
 
   const shutdown = async () => {
     await Promise.all(workers.map((w) => w.close()));

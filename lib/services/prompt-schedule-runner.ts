@@ -55,7 +55,7 @@ export async function runDuePromptSchedules(): Promise<RunDuePromptSchedulesResu
       scanned: 0,
       due: 0,
       queueAvailable: false,
-      message: "Redis not configured — set REDIS_URL or Upstash and run workers.",
+      message: "Redis not configured — set REDIS_URL (Railway Redis) and run workers.",
     };
   }
 

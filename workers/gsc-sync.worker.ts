@@ -1,5 +1,6 @@
 import type IORedis from "ioredis";
 import { Worker } from "bullmq";
+import { withWorkerSettings } from "@/lib/redis/bullmq-options";
 import { GSC_SYNC_QUEUE_NAME } from "@/lib/queues/queue-names";
 import type { GscSyncJobData } from "@/lib/queues/types";
 import { executeGscSyncJob } from "@/lib/services/gsc-sync-job";
@@ -13,11 +14,11 @@ export function registerGscSyncWorker(connection: IORedis) {
       console.log("[gsc-sync-worker] done", job.id, result);
       return result;
     },
-    {
+    withWorkerSettings({
       connection,
       concurrency: 1,
       lockDuration: 300_000,
-    },
+    }),
   );
 
   worker.on("failed", (job, err) => {
