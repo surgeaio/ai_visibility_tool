@@ -50,8 +50,9 @@ export default function PromptsPage() {
   const [llmResultsLoading, setLlmResultsLoading] = useState(false);
 
   useEffect(() => {
-    void fetchApiPrompts();
-  }, [fetchApiPrompts]);
+    setSelected({});
+    void fetchApiPrompts(selectedBrandId || undefined);
+  }, [selectedBrandId, fetchApiPrompts]);
 
   const detail = useMemo(() => prompts.find((p) => p.id === detailId), [prompts, detailId]);
 
@@ -75,7 +76,7 @@ export default function PromptsPage() {
     .map(([k]) => k);
 
   async function addPrompt() {
-    if (!newPrompt.trim() || saving) return;
+    if (!newPrompt.trim() || saving || !selectedBrandId) return;
     setSaving(true);
     setActionError(null);
     try {
@@ -85,7 +86,7 @@ export default function PromptsPage() {
         body: JSON.stringify({
           text: newPrompt.trim(),
           category,
-          ...(selectedBrandId ? { brandId: selectedBrandId } : {}),
+          brandId: selectedBrandId,
         }),
       });
       if (!res.ok) {
@@ -104,7 +105,7 @@ export default function PromptsPage() {
       }
       setNewPrompt("");
       setModalOpen(false);
-      await fetchApiPrompts();
+      await fetchApiPrompts(selectedBrandId);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Failed to save prompt");
     } finally {
@@ -124,7 +125,7 @@ export default function PromptsPage() {
         delete next[id];
         return next;
       });
-      await fetchApiPrompts();
+      await fetchApiPrompts(selectedBrandId || undefined);
     } catch (e) {
       setActionError(e instanceof Error ? e.message : "Failed to delete");
     }
@@ -188,7 +189,7 @@ export default function PromptsPage() {
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => void fetchApiPrompts()}
+            onClick={() => void fetchApiPrompts(selectedBrandId || undefined)}
             disabled={promptsStatus === "loading"}
           >
             <RefreshCw className={`mr-2 h-4 w-4 ${promptsStatus === "loading" ? "animate-spin" : ""}`} />
@@ -243,7 +244,7 @@ export default function PromptsPage() {
                 <Button variant="secondary" onClick={() => setModalOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={() => void addPrompt()} disabled={saving}>
+                <Button onClick={() => void addPrompt()} disabled={saving || !selectedBrandId}>
                   {saving ? "Saving…" : "Save"}
                 </Button>
               </DialogFooter>
@@ -252,9 +253,16 @@ export default function PromptsPage() {
         </div>
       </div>
 
+      {!selectedBrandId ? (
+        <div className="rounded-xl border border-[#262626] bg-[#111] px-6 py-12 text-center">
+          <h3 className="text-lg font-semibold text-white">Select a client</h3>
+          <p className="mt-2 text-sm text-neutral-400">Choose a client from the sidebar to manage their prompts.</p>
+        </div>
+      ) : null}
+
       {promptsError ? (
         <div className="rounded-lg border border-amber-900/60 bg-amber-950/30 px-4 py-3 text-sm text-amber-100">
-          <span className="font-medium">Could not sync prompts from API.</span> Showing seed fallback.{" "}
+          <span className="font-medium">Could not load prompts.</span>{" "}
           <span className="text-amber-200/80">{promptsError}</span>
         </div>
       ) : null}
@@ -294,6 +302,18 @@ export default function PromptsPage() {
               <tr>
                 <td colSpan={7} className="p-8 text-center text-neutral-500">
                   Loading prompts…
+                </td>
+              </tr>
+            ) : null}
+            {selectedBrandId &&
+            promptsStatus !== "loading" &&
+            prompts.length === 0 ? (
+              <tr>
+                <td colSpan={7} className="p-8 text-center">
+                  <p className="font-medium text-white">No prompts yet</p>
+                  <p className="mt-1 text-sm text-neutral-500">
+                    Add your first prompt for {brandName || "this client"}.
+                  </p>
                 </td>
               </tr>
             ) : null}

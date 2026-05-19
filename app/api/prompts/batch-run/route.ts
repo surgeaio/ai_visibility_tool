@@ -8,14 +8,28 @@ import { getPromptExecutionQueue } from "@/lib/queues/prompt-execution.queue";
 import { PromptsRepository } from "@/lib/repositories";
 import { isRedisAvailable } from "@/lib/redis/client";
 import { executePromptExecutionJob } from "@/lib/services/llm-tracker";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { uuidSchema } from "@/lib/validators/common.schema";
 
 export const maxDuration = 60;
 
 const batchRunSchema = z.object({
   prompts: z.array(z.string().trim().min(5).max(500)).min(1).max(10),
-  brandId: z.string().uuid().optional(),
+  brandId: uuidSchema,
   category: z.string().trim().min(1).max(80).optional().default("general"),
 });
+
+async function verifyBrandForUser(brandId: string, userId: string): Promise<boolean> {
+  const supabase = await createServerSupabaseClient();
+  const { data, error } = await supabase
+    .from("brands")
+    .select("id")
+    .eq("id", brandId)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return Boolean(data);
+}
 
 const promptsRepo = new PromptsRepository();
 
@@ -42,6 +56,12 @@ export async function POST(req: Request) {
   }
 
   const { prompts, brandId, category } = parsed.data;
+
+  const allowed = await verifyBrandForUser(brandId, userId);
+  if (!allowed) {
+    return Response.json({ error: "Brand not found", requestId }, { status: 404 });
+  }
+
   const results: Array<{ promptText: string; promptId?: string; status: string; error?: string }> = [];
 
   for (const text of prompts) {

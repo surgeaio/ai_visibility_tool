@@ -41,7 +41,7 @@ export const updatePromptSchema = createPromptSchema
   });
 
 export const listPromptsQuerySchema = paginationSchema.extend({
-  brandId: uuidSchema.optional(),
+  brandId: uuidSchema,
   category: promptCategorySchema.optional(),
   isActive: z.coerce.boolean().optional(),
   search: z.string().trim().min(1).max(100).optional(),
@@ -65,7 +65,7 @@ export const promptIdParamSchema = z.object({
 export const createPromptApiSchema = z.object({
   text: z.string().trim().min(5).max(500),
   category: z.string().trim().min(1).max(80).default("general"),
-  brandId: z.string().uuid().optional(),
+  brandId: uuidSchema,
 });
 
 export type PromptCategory = z.infer<typeof promptCategorySchema>;

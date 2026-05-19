@@ -16,7 +16,7 @@ export interface PromptEntity {
 export interface PromptCreateInput {
   text: string;
   category: string;
-  brandId?: string;
+  brandId: string;
   userId?: string;
   tags?: string[];
 }
@@ -92,6 +92,11 @@ export class PromptsRepository extends BaseRepository<
     const sortBy = options.sortBy ?? "created_at";
     const sortOrder = options.sortOrder ?? "desc";
 
+    const brandId = options.filters?.brandId ? String(options.filters.brandId) : null;
+    if (!brandId) {
+      return { items: [], total: 0 };
+    }
+
     if (this.isDemoMode()) {
       const filtered = DEMO_PROMPTS
         .filter((item) =>
@@ -102,11 +107,7 @@ export class PromptsRepository extends BaseRepository<
             ? item.category.toLowerCase() === String(options.filters.category).toLowerCase()
             : true,
         )
-        .filter(() =>
-          options.filters?.brandId
-            ? String(options.filters.brandId) === DEMO_BRAND_ID
-            : true,
-        )
+        .filter(() => brandId === DEMO_BRAND_ID)
         .map((item) => ({
           id: item.id,
           brandId: DEMO_BRAND_ID,
@@ -127,9 +128,7 @@ export class PromptsRepository extends BaseRepository<
       .range(offset, offset + limit - 1)
       .order(sortBy === "text" ? "text" : "created_at", { ascending: sortOrder === "asc" });
     if (options.search) query = query.ilike("text", `%${options.search}%`);
-    if (options.filters?.brandId) {
-      query = query.eq("brand_id", String(options.filters.brandId));
-    }
+    query = query.eq("brand_id", brandId);
     if (options.filters?.is_active !== undefined) {
       query = query.eq("is_active", Boolean(options.filters.is_active));
     }
@@ -168,35 +167,23 @@ export class PromptsRepository extends BaseRepository<
       return created;
     }
 
-    const supabase = await this.getClient();
-    let brandId = input.brandId;
-
-    console.log(`[prompts.create] input.brandId=${input.brandId ?? "—"} userId=${input.userId ?? "—"}`);
-
-    if (!brandId && input.userId) {
-      const { data: userBrand, error: userBrandError } = await supabase
-        .from("brands")
-        .select("id")
-        .eq("user_id", input.userId)
-        .order("created_at", { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      if (userBrandError) throw new DatabaseError(userBrandError.message);
-      brandId = userBrand?.id;
-      console.log(`[prompts.create] user brand fallback: ${brandId ?? "none"}`);
-    }
-
+    const brandId = input.brandId;
     if (!brandId) {
-      const { data: firstBrand, error: brandError } = await supabase
+      throw new DatabaseError("brandId is required to create a prompt");
+    }
+
+    const supabase = await this.getClient();
+
+    if (input.userId) {
+      const { data: owned, error: brandErr } = await supabase
         .from("brands")
         .select("id")
-        .limit(1)
+        .eq("id", brandId)
+        .eq("user_id", input.userId)
         .maybeSingle();
-      if (brandError) throw new DatabaseError(brandError.message);
-      brandId = firstBrand?.id;
-      console.log(`[prompts.create] global first brand fallback: ${brandId ?? "none"}`);
+      if (brandErr) throw new DatabaseError(brandErr.message);
+      if (!owned) throw new DatabaseError("Brand not found or access denied");
     }
-    if (!brandId) throw new DatabaseError("No brand available for prompt creation");
 
     const { data, error } = await supabase
       .from("prompts")

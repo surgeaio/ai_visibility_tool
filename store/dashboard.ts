@@ -41,7 +41,7 @@ interface DashboardState {
   setDateRange: (r: DateRange) => void;
   setModelFilter: (m: ModelFilter) => void;
   toggleRecommendationDone: (id: string) => void;
-  fetchApiPrompts: () => Promise<void>;
+  fetchApiPrompts: (brandId?: string) => Promise<void>;
 }
 
 export const useDashboardStore = create<DashboardState>((set, get) => ({
@@ -64,20 +64,49 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
         [id]: !get().recommendationCompleted[id],
       },
     }),
-  fetchApiPrompts: async () => {
-    set({ apiPromptsStatus: "loading", apiPromptsError: null });
+  fetchApiPrompts: async (brandId?: string) => {
+    if (!brandId) {
+      set({
+        apiPrompts: [],
+        apiPromptsStatus: "ready",
+        apiPromptsError: null,
+      });
+      return;
+    }
+
+    set({ apiPromptsStatus: "loading", apiPromptsError: null, apiPrompts: [] });
     try {
-      const res = await fetch(
-        "/api/prompts?limit=100&offset=0&sortBy=last_run&sortOrder=desc",
-        { cache: "no-store" },
-      );
+      const params = new URLSearchParams({
+        brandId,
+        limit: "100",
+        offset: "0",
+        sortBy: "created_at",
+        sortOrder: "desc",
+      });
+      const res = await fetch(`/api/prompts?${params.toString()}`, { cache: "no-store" });
       if (!res.ok) {
         const text = await res.text();
         throw new Error(text || `HTTP ${res.status}`);
       }
-      const json = (await res.json()) as { prompts: DashboardPromptRow[] };
+      const json = (await res.json()) as {
+        prompts: Array<{
+          id: string;
+          text: string;
+          category: string;
+          visibility?: boolean;
+          sentiment?: number | null;
+          lastRun?: string;
+        }>;
+      };
       set({
-        apiPrompts: json.prompts,
+        apiPrompts: (json.prompts ?? []).map((p) => ({
+          id: p.id,
+          text: p.text,
+          category: p.category,
+          visibility: p.visibility ?? false,
+          sentiment: p.sentiment ?? null,
+          lastRun: p.lastRun ?? new Date().toISOString(),
+        })),
         apiPromptsStatus: "ready",
         apiPromptsError: null,
       });
@@ -85,7 +114,7 @@ export const useDashboardStore = create<DashboardState>((set, get) => ({
       set({
         apiPromptsStatus: "error",
         apiPromptsError: error instanceof Error ? error.message : "Failed to load prompts",
-        apiPrompts: mapSeedPrompts(),
+        apiPrompts: [],
       });
     }
   },
