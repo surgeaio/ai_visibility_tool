@@ -1,5 +1,5 @@
 import { getPromptExecutionQueue } from "@/lib/queues";
-import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
+import { tryGetWorkerSupabaseClient } from "@/lib/supabase/worker-client";
 
 export type RunDuePromptSchedulesResult = {
   ok: boolean;
@@ -35,7 +35,7 @@ function isDue(row: {
 /** Enqueues BullMQ jobs for prompt schedules that are due. Used by Railway workers and cron API. */
 export async function runDuePromptSchedules(): Promise<RunDuePromptSchedulesResult> {
   const queue = getPromptExecutionQueue();
-  const admin = tryCreateAdminSupabaseClient();
+  const admin = tryGetWorkerSupabaseClient();
 
   if (!admin) {
     return {

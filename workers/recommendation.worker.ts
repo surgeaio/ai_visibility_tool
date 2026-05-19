@@ -3,7 +3,7 @@ import { Worker } from "bullmq";
 import { RECOMMENDATION_QUEUE_NAME } from "@/lib/queues/queue-names";
 import type { RecommendationJobData } from "@/lib/queues/types";
 import { RecommendationEngine } from "@/lib/services/recommendation-engine";
-import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
+import { tryGetWorkerSupabaseClient } from "@/lib/supabase/worker-client";
 
 export function registerRecommendationWorker(connection: IORedis) {
   return new Worker<RecommendationJobData>(
@@ -13,7 +13,7 @@ export function registerRecommendationWorker(connection: IORedis) {
       const engine = new RecommendationEngine(userId);
       const name = brandName ?? "Your brand";
       const recs = await engine.generateAll(brandId, name);
-      const admin = tryCreateAdminSupabaseClient();
+      const admin = tryGetWorkerSupabaseClient();
       if (admin) {
         const storageCategory: Record<
           "llm" | "google" | "website" | "content" | "competitor",
