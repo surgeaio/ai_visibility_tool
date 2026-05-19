@@ -7,6 +7,8 @@ import { RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { runGscSyncForBrand } from "@/lib/client/gsc-sync";
 import { fetchJson } from "@/lib/client/fetch-json";
+import { formatGscClicks, formatGscCtr, formatGscImpressions, formatGscPosition } from "@/lib/google-rankings/format";
+import { googleRankingsRangeToDays } from "@/lib/google-rankings/gsc-dates";
 import { gscTheme } from "@/lib/google-rankings/theme";
 import { useSelectedBrand } from "@/lib/context/brand-context";
 import { GoogleRankingsEmptyState } from "@/components/google-rankings/EmptyState";
@@ -35,6 +37,8 @@ type ApiPayload = {
   googleEmail?: string | null;
   lastSyncedAt?: string | null;
   brandName?: string;
+  dateRange?: { startDate: string; endDate: string };
+  searchType?: string;
   error?: string;
   summary?: {
     clicks: number;
@@ -148,7 +152,7 @@ export function GoogleRankingsDashboard() {
     setSyncBusy(true);
     const tid = toast.loading("Syncing Search Console…");
     try {
-      await runGscSyncForBrand(selectedBrandId);
+      await runGscSyncForBrand(selectedBrandId, googleRankingsRangeToDays(range));
       toast.dismiss(tid);
       toast.success("Sync complete");
       setQueriesPage(1);
@@ -217,6 +221,13 @@ export function GoogleRankingsDashboard() {
           {data.property ? (
             <p className="mt-1 text-xs text-neutral-500">
               Property <span className="text-neutral-400">{data.property}</span>
+              {data.dateRange ? (
+                <>
+                  {" "}
+                  · {data.dateRange.startDate} – {data.dateRange.endDate}
+                </>
+              ) : null}
+              {data.searchType ? <> · Web search</> : null}
               {data.googleEmail ? <> · {data.googleEmail}</> : null}
               {data.lastSyncedAt ? (
                 <> · Last sync {new Date(data.lastSyncedAt).toLocaleString()}</>
@@ -248,20 +259,25 @@ export function GoogleRankingsDashboard() {
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <MetricCard
           label="Total clicks"
-          value={s.clicks.toLocaleString()}
+          value={formatGscClicks(s.clicks)}
           change={cmp?.clicks ?? null}
           sparkline={sparkClicks}
         />
         <MetricCard
           label="Total impressions"
-          value={s.impressions.toLocaleString()}
+          value={formatGscImpressions(s.impressions)}
           change={cmp?.impressions ?? null}
           sparkline={sparkImpressions}
         />
-        <MetricCard label="Average CTR" value={formatPct(s.ctr)} change={cmp?.ctr ?? null} sparkline={sparkCtr} />
+        <MetricCard
+          label="Average CTR"
+          value={formatGscCtr(s.ctr)}
+          change={cmp?.ctr ?? null}
+          sparkline={sparkCtr}
+        />
         <MetricCard
           label="Average position"
-          value={formatPos(s.avgPosition)}
+          value={formatGscPosition(s.avgPosition)}
           change={cmp?.position ?? null}
           sparkline={sparkPos}
           invertTrend

@@ -53,22 +53,40 @@ export function paginate<T>(items: T[], page: number, pageSize: number) {
   };
 }
 
+export function weightedAveragePosition(rows: Array<{ position: number; impressions: number }>): number {
+  let posSum = 0;
+  let imp = 0;
+  for (const r of rows) {
+    const w = r.impressions ?? 0;
+    if (w <= 0) continue;
+    posSum += Number(r.position) * w;
+    imp += w;
+  }
+  return imp > 0 ? posSum / imp : 0;
+}
+
 export function aggregateKeywords(rows: QueryRow[]): KeywordTableRow[] {
-  const map = new Map<string, KeywordTableRow & { bestUrl: string; bestClicks: number }>();
+  const map = new Map<
+    string,
+    KeywordTableRow & { bestUrl: string; bestClicks: number; posSum: number; weight: number }
+  >();
   for (const r of rows) {
     const cur = map.get(r.query) ?? {
       keyword: r.query,
       clicks: 0,
       impressions: 0,
       ctr: 0,
-      position: 100,
+      position: 0,
       bestUrl: r.page_url,
       bestClicks: 0,
+      posSum: 0,
+      weight: 0,
     };
     cur.clicks += r.clicks;
     cur.impressions += r.impressions;
-    const pos = Number(r.position);
-    if (pos < cur.position) cur.position = pos;
+    const w = r.impressions || 0;
+    cur.posSum += Number(r.position) * w;
+    cur.weight += w;
     if (r.clicks > cur.bestClicks) {
       cur.bestClicks = r.clicks;
       cur.bestUrl = r.page_url;
@@ -76,12 +94,12 @@ export function aggregateKeywords(rows: QueryRow[]): KeywordTableRow[] {
     map.set(r.query, cur);
   }
   return Array.from(map.values())
-    .map((row) => ({
+    .map(({ posSum, weight, bestUrl, ...row }) => ({
       keyword: row.keyword,
       clicks: row.clicks,
       impressions: row.impressions,
-      position: row.position,
-      url: row.bestUrl,
+      position: weight > 0 ? posSum / weight : 0,
+      url: bestUrl,
       ctr: row.impressions > 0 ? row.clicks / row.impressions : 0,
     }))
     .sort((a, b) => b.clicks - a.clicks);

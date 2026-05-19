@@ -28,11 +28,14 @@ export type GscJobStatusResponse = {
  * Triggers GSC sync via Next.js API (never calls Google directly).
  * When Redis/workers are available, polls until the background job completes.
  */
-export async function runGscSyncForBrand(brandId: string): Promise<GscSyncResponse> {
+export async function runGscSyncForBrand(
+  brandId: string,
+  daysBack = 28,
+): Promise<GscSyncResponse> {
   const started = await fetchJson<GscSyncResponse>("/api/gsc/sync", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ brandId }),
+    body: JSON.stringify({ brandId, daysBack }),
   });
 
   if (!started.ok) {

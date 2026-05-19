@@ -1,3 +1,4 @@
+import { getGscDateRange } from "@/lib/google-rankings/gsc-dates";
 import { GoogleOAuthService } from "@/lib/services/google-oauth";
 import { GoogleSearchConsoleService } from "@/lib/services/google-search-console";
 import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
@@ -54,16 +55,23 @@ export async function syncGscData({
   const oauth = new GoogleOAuthService();
   const gsc = new GoogleSearchConsoleService(oauth.getAuthenticatedClient(accessToken));
   const siteUrl = conn.site_url;
-  const endDate = new Date().toISOString().slice(0, 10);
-  const startDate = new Date(Date.now() - daysBack * 86400_000).toISOString().slice(0, 10);
+  const { startDate, endDate } = getGscDateRange(daysBack);
 
-  console.log(`[gsc-sync] ${siteUrl} ${startDate} → ${endDate}`);
+  console.log(`[gsc-sync] ${siteUrl} ${startDate} → ${endDate} (web, ${daysBack}d)`);
 
-  const dailyAnalytics = await gsc.getSearchAnalytics(siteUrl, {
+  const propertyTotals = await gsc.getPropertyTotals(siteUrl, startDate, endDate, "web");
+  console.log("[gsc-sync] property totals", {
+    clicks: propertyTotals.clicks,
+    impressions: propertyTotals.impressions,
+    ctr: propertyTotals.ctr,
+    position: propertyTotals.position,
+  });
+
+  const dailyAnalytics = await gsc.getSearchAnalyticsPaginated(siteUrl, {
     startDate,
     endDate,
     dimensions: ["date"],
-    rowLimit: 1000,
+    searchType: "web",
   });
 
   const dailyRowsPayload = dailyAnalytics.map((r) => ({
@@ -86,11 +94,11 @@ export async function syncGscData({
   );
   console.log(`[gsc-sync] daily rows: ${dailyRows}`);
 
-  const queryAnalytics = await gsc.getSearchAnalytics(siteUrl, {
+  const queryAnalytics = await gsc.getSearchAnalyticsPaginated(siteUrl, {
     startDate,
     endDate,
     dimensions: ["query", "page"],
-    rowLimit: 2500,
+    searchType: "web",
   });
 
   const queryRowsPayload = queryAnalytics

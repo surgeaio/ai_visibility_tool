@@ -83,7 +83,7 @@ export function RankingsTable<T>({
 }
 
 export function formatPct(ctr: number) {
-  return `${(ctr * 100).toFixed(2)}%`;
+  return `${(ctr * 100).toFixed(1)}%`;
 }
 
 export function formatPos(position: number) {
