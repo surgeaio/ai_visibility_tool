@@ -43,7 +43,7 @@ async function syncLlmBrandPerformance(params: {
 }) {
   const admin = requireAdmin();
   const platformId = await resolvePlatformIdForProvider(MODEL_TO_PROVIDER[params.model]);
-  await admin.from("llm_brand_performance").insert({
+  const { error } = await admin.from("llm_brand_performance").insert({
     brand_id: params.brandId,
     platform_id: platformId,
     prompt_id: params.promptId,
@@ -57,6 +57,10 @@ async function syncLlmBrandPerformance(params: {
     context: params.result.context,
     measured_at: new Date().toISOString(),
   });
+  if (error) {
+    console.error("[visibility-orchestrator] llm_brand_performance insert failed:", error.message);
+    throw new Error(error.message);
+  }
 }
 
 function visibilityFromAnalysis(mentioned: boolean, position: number | null, sentiment: number | null): number {
@@ -141,10 +145,18 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
 
   const { data: brand, error: bErr } = await supabase
     .from("brands")
-    .select("id, name, domain, website")
+    .select("id, name, domain, website, aliases")
     .eq("id", opts.brandId)
     .single();
   if (bErr || !brand) throw new Error("Brand not found");
+
+  const brandAliases = Array.isArray(brand.aliases) ? (brand.aliases as string[]) : [];
+  const ownBrand = {
+    name: brand.name as string,
+    domain: (brand.domain ?? brand.website) as string | null,
+    website: brand.website as string | null,
+    aliases: brandAliases,
+  };
 
   const { data: competitors } = await supabase
     .from("competitors")
@@ -202,15 +214,19 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
     try {
       const analysis = await analyzeResponse({
         responseText: resp.responseText,
-        ownBrand: {
-          name: brand.name as string,
-          domain: (brand.domain ?? brand.website) as string | null,
-        },
+        ownBrand,
         competitors: competitorList,
         rawSources: resp.sources,
       });
 
-      await supabase.from("chat_analysis").insert({
+      console.log(
+        `[visibility-orchestrator] model=${resp.model} brand=${ownBrand.name} mentioned=${analysis.brandMentioned} position=${analysis.brandPosition} source=${analysis.detectionSource}`,
+      );
+      console.log(
+        `[visibility-orchestrator] response preview: ${resp.responseText.slice(0, 200).replace(/\n/g, " ")}`,
+      );
+
+      const { error: analysisErr } = await supabase.from("chat_analysis").insert({
         chat_response_id: savedResp.id,
         brand_id: opts.brandId,
         prompt_id: opts.promptId,
@@ -224,6 +240,11 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
         all_brands_mentioned: analysis.allBrandsMentioned,
         sources_used: analysis.domainsReferenced.map((d) => ({ domain: d })),
       });
+
+      if (analysisErr) {
+        console.error("[visibility-orchestrator] chat_analysis insert failed:", analysisErr);
+        throw new Error(analysisErr.message);
+      }
 
       if (analysis.domainsReferenced.length > 0) {
         await supabase.from("source_appearances").insert(
@@ -338,4 +359,131 @@ export async function runAllPromptsForBrand(
   }
 
   return { jobId: job?.id ?? null, completed, failed };
+}
+
+/** Re-run brand detection on saved chat_responses without calling LLMs again. */
+export async function reanalyzeBrandResponses(brandId: string) {
+  const supabase = requireAdmin();
+  await ensureLlmPlatformsSeeded();
+
+  const { data: brand, error: bErr } = await supabase
+    .from("brands")
+    .select("id, name, domain, website, aliases")
+    .eq("id", brandId)
+    .single();
+  if (bErr || !brand) throw new Error("Brand not found");
+
+  const ownBrand = {
+    name: brand.name as string,
+    domain: (brand.domain ?? brand.website) as string | null,
+    website: brand.website as string | null,
+    aliases: Array.isArray(brand.aliases) ? (brand.aliases as string[]) : [],
+  };
+
+  const { data: competitors } = await supabase
+    .from("competitors")
+    .select("competitor_name, domain, website")
+    .eq("brand_id", brandId);
+
+  const competitorList = (competitors ?? []).map((c) => ({
+    name: c.competitor_name as string,
+    domain: (c.domain ?? c.website) as string | null,
+  }));
+
+  const { data: responses, error: respErr } = await supabase
+    .from("chat_responses")
+    .select("id, prompt_id, ai_model, response_text, raw_sources, run_date, status")
+    .eq("brand_id", brandId)
+    .eq("status", "success")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  if (respErr) throw new Error(respErr.message);
+  if (!responses?.length) {
+    return { updated: 0, message: "No saved responses to re-analyze" };
+  }
+
+  let updated = 0;
+  const datesToRefresh = new Set<string>();
+
+  for (const row of responses) {
+    const text = row.response_text as string;
+    if (!text?.trim()) continue;
+
+    const runDate = (row.run_date as string) ?? new Date().toISOString().slice(0, 10);
+    datesToRefresh.add(runDate);
+
+    const analysis = await analyzeResponse({
+      responseText: text,
+      ownBrand,
+      competitors: competitorList,
+      rawSources: (row.raw_sources as Array<{ url: string }>) ?? [],
+    });
+
+    await supabase.from("chat_analysis").delete().eq("chat_response_id", row.id);
+
+    const { error: insertErr } = await supabase.from("chat_analysis").insert({
+      chat_response_id: row.id,
+      brand_id: brandId,
+      prompt_id: row.prompt_id as string,
+      ai_model: row.ai_model as string,
+      run_date: runDate,
+      brand_mentioned: analysis.brandMentioned,
+      brand_position: analysis.brandPosition,
+      brand_sentiment: analysis.brandSentiment,
+      brand_sentiment_label: analysis.brandSentimentLabel,
+      brand_mention_context: analysis.brandMentionContext,
+      all_brands_mentioned: analysis.allBrandsMentioned,
+      sources_used: analysis.domainsReferenced.map((d) => ({ domain: d })),
+    });
+
+    if (insertErr) {
+      console.error("[visibility-orchestrator] reanalyze insert failed:", insertErr);
+      continue;
+    }
+
+    const visibilityScore = visibilityFromAnalysis(
+      analysis.brandMentioned,
+      analysis.brandPosition,
+      analysis.brandSentiment,
+    );
+
+    const modelName = row.ai_model as AIModelName;
+    if (modelName in MODEL_TO_PROVIDER) {
+      const platformId = await resolvePlatformIdForProvider(MODEL_TO_PROVIDER[modelName]);
+      await supabase
+        .from("llm_brand_performance")
+        .delete()
+        .eq("brand_id", brandId)
+        .eq("prompt_id", row.prompt_id as string)
+        .eq("platform_id", platformId);
+    }
+
+    try {
+      await syncLlmBrandPerformance({
+        brandId,
+        promptId: row.prompt_id as string,
+        model: modelName,
+        result: {
+          isMentioned: analysis.brandMentioned,
+          rankPosition: analysis.brandPosition,
+          sentiment: analysis.brandSentimentLabel,
+          sentimentScore: analysis.brandSentiment,
+          visibilityScore,
+          rawResponse: text,
+          context: analysis.brandMentionContext,
+        },
+      });
+    } catch (perfErr) {
+      console.error("[visibility-orchestrator] reanalyze perf sync failed:", perfErr);
+    }
+
+    updated += 1;
+  }
+
+  for (const date of datesToRefresh) {
+    await refreshDailyMetrics(brandId, date);
+  }
+
+  return { updated, datesRefreshed: [...datesToRefresh] };
 }

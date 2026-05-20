@@ -39,6 +39,7 @@ export default function LLMVisibilityPage() {
   const [data, setData] = useState<LlmVisibilityDashboardResponse>(EMPTY_DASHBOARD);
   const [runModalOpen, setRunModalOpen] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
+  const [reanalyzing, setReanalyzing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchAllData = useCallback(async () => {
@@ -149,6 +150,26 @@ export default function LLMVisibilityPage() {
     }
   }
 
+  async function handleReanalyze() {
+    if (!selectedBrandId || reanalyzing) return;
+    setReanalyzing(true);
+    try {
+      const res = await fetch("/api/visibility/reanalyze", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ brandId: selectedBrandId }),
+      });
+      const json = (await res.json()) as { updated?: number; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Re-analyze failed");
+      toast.success(`Re-analyzed ${json.updated ?? 0} saved responses`);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Re-analyze failed");
+    } finally {
+      setReanalyzing(false);
+    }
+  }
+
   async function handleDownloadReport() {
     if (!selectedBrandId) return;
     const params = new URLSearchParams({
@@ -194,6 +215,14 @@ export default function LLMVisibilityPage() {
           </Button>
           <Button size="sm" variant="secondary" onClick={() => setRunModalOpen(true)}>
             Quick run
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={reanalyzing || !selectedBrandId}
+            onClick={() => void handleReanalyze()}
+          >
+            {reanalyzing ? "Re-analyzing…" : "Re-analyze saved"}
           </Button>
           <Button
             size="sm"

@@ -1,8 +1,17 @@
 import Anthropic from "@anthropic-ai/sdk";
+import {
+  buildBrandNameVariations,
+  calculateBrandSentiment,
+  candidateMatchesOwnBrand,
+  detectBrandMention,
+  extractMentionContext,
+  sentimentLabelFromScore,
+  type BrandForDetection,
+} from "@/lib/services/brand-mention-detector";
 
 export interface AnalyzerInput {
   responseText: string;
-  ownBrand: { name: string; domain?: string | null; aliases?: string[] };
+  ownBrand: BrandForDetection;
   competitors: Array<{ name: string; domain?: string | null }>;
   rawSources?: Array<{ url: string }>;
 }
@@ -24,6 +33,7 @@ export interface AnalyzerOutput {
   allBrandsMentioned: BrandMention[];
   domainsReferenced: string[];
   rawAnalyzerOutput: string;
+  detectionSource: "anthropic" | "local" | "hybrid";
 }
 
 function extractDomains(text: string, sources: Array<{ url: string }> = []): string[] {
@@ -60,21 +70,54 @@ function parseAnalyzerJson(rawText: string): { brands_in_order: BrandMention[] }
   }
 }
 
+function analyzeLocally(input: AnalyzerInput): AnalyzerOutput {
+  const detection = detectBrandMention(input.responseText, input.ownBrand);
+  const sentimentScore = detection.mentioned
+    ? calculateBrandSentiment(input.responseText, input.ownBrand)
+    : null;
+  const label =
+    sentimentScore != null ? sentimentLabelFromScore(sentimentScore) : null;
+
+  return {
+    brandMentioned: detection.mentioned,
+    brandPosition: detection.position,
+    brandSentiment: sentimentScore,
+    brandSentimentLabel: label,
+    brandMentionContext: detection.mentioned
+      ? extractMentionContext(input.responseText, input.ownBrand)
+      : null,
+    allBrandsMentioned: [],
+    domainsReferenced: extractDomains(input.responseText, input.rawSources),
+    rawAnalyzerOutput: "",
+    detectionSource: "local",
+  };
+}
+
 export async function analyzeResponse(input: AnalyzerInput): Promise<AnalyzerOutput> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
+  const local = analyzeLocally(input);
+  const nameVariations = buildBrandNameVariations(input.ownBrand);
+  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+
   if (!apiKey) {
-    throw new Error("ANTHROPIC_API_KEY required for response analyzer");
+    console.warn("[response-analyzer] ANTHROPIC_API_KEY missing — using local brand detection");
+    console.log(
+      `[response-analyzer] Brand: ${input.ownBrand.name} | Mentioned: ${local.brandMentioned} | Position: ${local.brandPosition}`,
+    );
+    return local;
   }
 
   const anthropic = new Anthropic({ apiKey });
   const allBrandNames = [
-    input.ownBrand.name,
-    ...(input.ownBrand.aliases ?? []),
-    ...input.competitors.map((c) => c.name),
+    ...new Set([
+      input.ownBrand.name,
+      ...nameVariations,
+      ...(input.ownBrand.aliases ?? []),
+      ...input.competitors.map((c) => c.name),
+    ]),
   ];
 
   const systemPrompt = `You are a precise brand analysis AI. Analyze the given AI response and extract:
-1. Every brand from the candidate list that is mentioned
+1. Every brand from the candidate list that is mentioned (including domain names and aliases)
 2. The ORDER (position) they appear in (1 = first mentioned, 2 = second, etc.)
 3. Sentiment toward each brand (0-100 score where 0=very negative, 50=neutral, 100=very positive)
 4. A short context snippet (max 200 chars) showing the mention
@@ -103,39 +146,68 @@ Return JSON in this exact format:
 
 If no candidate brands appear, return: { "brands_in_order": [] }`;
 
-  const message = await anthropic.messages.create({
-    model: "claude-sonnet-4-20250514",
-    max_tokens: 2000,
-    system: systemPrompt,
-    messages: [{ role: "user", content: userPrompt }],
-  });
+  let rawText = "";
+  try {
+    const message = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 2000,
+      system: systemPrompt,
+      messages: [{ role: "user", content: userPrompt }],
+    });
 
-  const rawText = message.content
-    .filter((b) => b.type === "text")
-    .map((b) => ("text" in b ? b.text : ""))
-    .join("\n")
-    .trim();
+    rawText = message.content
+      .filter((b) => b.type === "text")
+      .map((b) => ("text" in b ? b.text : ""))
+      .join("\n")
+      .trim();
+  } catch (err) {
+    console.error("[response-analyzer] Anthropic analysis failed, using local detection:", err);
+    return { ...local, rawAnalyzerOutput: "" };
+  }
 
   const parsed = parseAnalyzerJson(rawText);
   const allBrands = parsed.brands_in_order ?? [];
 
-  const ownLower = input.ownBrand.name.toLowerCase();
-  const aliases = (input.ownBrand.aliases ?? []).map((a) => a.toLowerCase());
-  const ownMention = allBrands.find((b) => {
-    const n = b.name.toLowerCase();
-    return n === ownLower || aliases.includes(n) || n.includes(ownLower);
-  });
+  const ownMention = allBrands.find((b) => candidateMatchesOwnBrand(b.name, input.ownBrand));
 
   const domains = extractDomains(input.responseText, input.rawSources);
 
+  let brandMentioned = Boolean(ownMention) || local.brandMentioned;
+  let brandPosition = ownMention?.position ?? local.brandPosition;
+  let brandSentiment = ownMention?.sentiment_score ?? local.brandSentiment;
+  let brandSentimentLabel = ownMention?.sentiment_label ?? local.brandSentimentLabel;
+  let brandMentionContext = ownMention?.context_snippet ?? local.brandMentionContext;
+
+  if (local.brandMentioned && !ownMention) {
+    brandMentioned = true;
+    brandPosition = brandPosition ?? local.brandPosition;
+    brandSentiment = brandSentiment ?? local.brandSentiment;
+    brandSentimentLabel = brandSentimentLabel ?? local.brandSentimentLabel;
+    brandMentionContext = brandMentionContext ?? local.brandMentionContext;
+  }
+
+  const detectionSource: AnalyzerOutput["detectionSource"] =
+    ownMention && local.brandMentioned
+      ? "hybrid"
+      : ownMention
+        ? "anthropic"
+        : local.brandMentioned
+          ? "local"
+          : "anthropic";
+
+  console.log(
+    `[response-analyzer] Brand: ${input.ownBrand.name} | Source: ${detectionSource} | Mentioned: ${brandMentioned} | Position: ${brandPosition}`,
+  );
+
   return {
-    brandMentioned: Boolean(ownMention),
-    brandPosition: ownMention?.position ?? null,
-    brandSentiment: ownMention?.sentiment_score ?? null,
-    brandSentimentLabel: ownMention?.sentiment_label ?? null,
-    brandMentionContext: ownMention?.context_snippet ?? null,
+    brandMentioned,
+    brandPosition,
+    brandSentiment,
+    brandSentimentLabel,
+    brandMentionContext,
     allBrandsMentioned: allBrands,
     domainsReferenced: domains,
     rawAnalyzerOutput: rawText,
+    detectionSource,
   };
 }

@@ -62,6 +62,7 @@ export interface Database {
           website: string | null;
           domain: string | null;
           category: string | null;
+          aliases: string[] | null;
           created_at: string;
         };
         Insert: {
@@ -72,6 +73,7 @@ export interface Database {
           website?: string | null;
           domain?: string | null;
           category?: string | null;
+          aliases?: string[] | null;
           created_at?: string;
         };
         Update: Partial<{
@@ -82,6 +84,7 @@ export interface Database {
           website: string | null;
           domain: string | null;
           category: string | null;
+          aliases: string[] | null;
           created_at: string;
         }>;
         Relationships: [];
