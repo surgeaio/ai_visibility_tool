@@ -28,9 +28,9 @@ export async function GET(req: Request) {
 
   const { data: brand, error: brandErr } = await supabase
     .from("brands")
-    .select("id, name, domain, website, aliases")
+    .select("id, name, domain, website")
     .eq("id", brandId)
-    .single();
+    .maybeSingle();
 
   if (brandErr || !brand) {
     return NextResponse.json({ error: "Brand not found" }, { status: 404 });
@@ -40,7 +40,7 @@ export async function GET(req: Request) {
     name: brand.name,
     domain: brand.domain ?? brand.website,
     website: brand.website,
-    aliases: brand.aliases ?? [],
+    aliases: [],
   };
 
   const variations = buildBrandNameVariations(ownBrand);

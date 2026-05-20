@@ -1,4 +1,5 @@
-import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
+import type { BrandForDetection } from "@/lib/services/brand-mention-detector";
 import {
   ensureLlmPlatformsSeeded,
   resolvePlatformIdForProvider,
@@ -15,9 +16,47 @@ const MODEL_TO_PROVIDER: Record<AIModelName, LlmKeyProviderName> = {
 };
 
 function requireAdmin() {
-  const admin = tryCreateAdminSupabaseClient();
-  if (!admin) throw new Error("SUPABASE_SERVICE_ROLE_KEY missing");
-  return admin;
+  return createAdminSupabaseClient();
+}
+
+type OrchestratorBrand = BrandForDetection & { id: string };
+
+async function loadBrandForOrchestrator(
+  supabase: ReturnType<typeof createAdminSupabaseClient>,
+  brandId: string,
+): Promise<OrchestratorBrand> {
+  console.log(`[visibility-orchestrator] Looking up brand: ${brandId}`);
+
+  const { data: brand, error } = await supabase
+    .from("brands")
+    .select("id, name, domain, website")
+    .eq("id", brandId)
+    .maybeSingle();
+
+  if (error) {
+    console.error("[visibility-orchestrator] Brand query error:", error.message, error.details);
+    throw new Error(`Brand query failed: ${error.message}`);
+  }
+
+  if (!brand) {
+    const { data: sample } = await supabase.from("brands").select("id, name").limit(5);
+    console.error(
+      "[visibility-orchestrator] Brand not found for ID:",
+      brandId,
+      "sample:",
+      sample?.map((b) => `${b.id}: ${b.name}`),
+    );
+    throw new Error(`Brand not found: ${brandId}`);
+  }
+
+  console.log(`[visibility-orchestrator] Found brand: ${brand.name}`);
+  return {
+    id: brand.id,
+    name: brand.name,
+    domain: brand.domain ?? brand.website,
+    website: brand.website,
+    aliases: [],
+  };
 }
 
 export interface RunPromptOptions {
@@ -143,29 +182,20 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
     .single();
   if (pErr || !prompt) throw new Error("Prompt not found");
 
-  const { data: brand, error: bErr } = await supabase
-    .from("brands")
-    .select("id, name, domain, website, aliases")
-    .eq("id", opts.brandId)
-    .single();
-  if (bErr || !brand) throw new Error("Brand not found");
+  const ownBrand = await loadBrandForOrchestrator(supabase, opts.brandId);
 
-  const brandAliases = Array.isArray(brand.aliases) ? (brand.aliases as string[]) : [];
-  const ownBrand = {
-    name: brand.name as string,
-    domain: (brand.domain ?? brand.website) as string | null,
-    website: brand.website as string | null,
-    aliases: brandAliases,
-  };
-
-  const { data: competitors } = await supabase
+  const { data: competitors, error: compErr } = await supabase
     .from("competitors")
-    .select("competitor_name, domain, website")
+    .select("competitor_name, domain")
     .eq("brand_id", opts.brandId);
+
+  if (compErr) {
+    console.error("[visibility-orchestrator] competitors query error:", compErr.message);
+  }
 
   const competitorList = (competitors ?? []).map((c) => ({
     name: c.competitor_name as string,
-    domain: (c.domain ?? c.website) as string | null,
+    domain: c.domain as string | null,
   }));
 
   const models = opts.models ?? ["chatgpt", "claude", "gemini", "perplexity"];
@@ -366,28 +396,16 @@ export async function reanalyzeBrandResponses(brandId: string) {
   const supabase = requireAdmin();
   await ensureLlmPlatformsSeeded();
 
-  const { data: brand, error: bErr } = await supabase
-    .from("brands")
-    .select("id, name, domain, website, aliases")
-    .eq("id", brandId)
-    .single();
-  if (bErr || !brand) throw new Error("Brand not found");
-
-  const ownBrand = {
-    name: brand.name as string,
-    domain: (brand.domain ?? brand.website) as string | null,
-    website: brand.website as string | null,
-    aliases: Array.isArray(brand.aliases) ? (brand.aliases as string[]) : [],
-  };
+  const ownBrand = await loadBrandForOrchestrator(supabase, brandId);
 
   const { data: competitors } = await supabase
     .from("competitors")
-    .select("competitor_name, domain, website")
+    .select("competitor_name, domain")
     .eq("brand_id", brandId);
 
   const competitorList = (competitors ?? []).map((c) => ({
     name: c.competitor_name as string,
-    domain: (c.domain ?? c.website) as string | null,
+    domain: c.domain as string | null,
   }));
 
   const { data: responses, error: respErr } = await supabase

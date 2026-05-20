@@ -14,6 +14,11 @@ export function createAdminSupabaseClient() {
   return createClient<Database>(url, key, nodeSupabaseClientOptions);
 }
 
+/** Alias for server routes and orchestrators that must bypass RLS. */
+export function getServiceRoleClient() {
+  return createAdminSupabaseClient();
+}
+
 /** Workers / cron use this when service role is optional (demo/local without DB). */
 export function tryCreateAdminSupabaseClient(): ReturnType<typeof createClient<Database>> | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
