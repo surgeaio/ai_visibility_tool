@@ -47,9 +47,15 @@ export default function RecommendationsPage() {
   >([]);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!selectedBrandId) return;
+    if (!selectedBrandId) {
+      setLoading(false);
+      setItems([]);
+      setTotal(0);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
@@ -75,16 +81,23 @@ export default function RecommendationsPage() {
   }, [selectedBrandId]);
 
   const loadAi = useCallback(async () => {
-    if (!selectedBrandId) return;
+    if (!selectedBrandId) {
+      setAiRecs([]);
+      setAiError(null);
+      return;
+    }
     setAiLoading(true);
+    setAiError(null);
     try {
       const res = await fetch(`/api/visibility/recommendations?brandId=${selectedBrandId}`, {
         cache: "no-store",
       });
-      const json = (await res.json()) as { recommendations?: typeof aiRecs };
+      const json = (await res.json()) as { recommendations?: typeof aiRecs; error?: string };
+      if (!res.ok) throw new Error(json.error ?? "Failed to load AI recommendations");
       setAiRecs(json.recommendations ?? []);
-    } catch {
+    } catch (e) {
       setAiRecs([]);
+      setAiError(e instanceof Error ? e.message : "Failed to load AI recommendations");
     } finally {
       setAiLoading(false);
     }
@@ -109,7 +122,9 @@ export default function RecommendationsPage() {
       toast.success("AI recommendations updated");
       await loadAi();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to regenerate");
+      const msg = e instanceof Error ? e.message : "Failed to regenerate";
+      toast.error(msg);
+      setAiError(msg);
     } finally {
       setAiGenerating(false);
     }
@@ -135,21 +150,19 @@ export default function RecommendationsPage() {
     }
     setGenerating(true);
     try {
-      const res = await fetch("/api/recommendations/generate", {
+      const res = await fetch("/api/visibility/recommendations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ brandId: selectedBrandId }),
       });
-      const json = (await res.json()) as { jobId?: string; status?: string; note?: string; error?: string };
+      const json = (await res.json()) as { count?: number; error?: string };
       if (!res.ok) throw new Error(json.error ?? "Generate failed");
-      if (json.status === "queued" && json.jobId) {
-        toast.success("Recommendations queued. Refresh in a few seconds.");
-      } else {
-        toast.message(json.note ?? "Check Redis for background workers.");
-      }
-      await load();
+      toast.success(`Generated ${json.count ?? 0} AI recommendations`);
+      await loadAi();
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Generate failed");
+      const msg = e instanceof Error ? e.message : "Generate failed";
+      toast.error(msg);
+      setAiError(msg);
     } finally {
       setGenerating(false);
     }
@@ -168,7 +181,7 @@ export default function RecommendationsPage() {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button size="sm" variant="secondary" disabled={generating} onClick={() => void handleGenerate()}>
-            {generating ? "Queueing…" : "Generate recommendations"}
+            {generating ? "Generating…" : "Generate AI insights"}
           </Button>
           <Select value={priority} onValueChange={setPriority}>
             <SelectTrigger className="w-[140px]">
@@ -214,7 +227,15 @@ export default function RecommendationsPage() {
               {aiGenerating ? "Generating…" : "Regenerate AI insights"}
             </Button>
           </div>
-          {aiLoading ? (
+          {aiError && (aiError.includes("ANTHROPIC") || aiError.includes("API key")) ? (
+            <div className="rounded-lg border border-red-800 bg-red-950/20 p-4 text-center">
+              <h4 className="font-medium text-red-400">API key required</h4>
+              <p className="mt-2 text-sm text-neutral-400">{aiError}</p>
+              <p className="mt-2 text-xs text-neutral-500">
+                Vercel → ai-visibility-tool → Settings → Environment Variables → ANTHROPIC_API_KEY
+              </p>
+            </div>
+          ) : aiLoading ? (
             <p className="text-sm text-neutral-500">Loading AI recommendations…</p>
           ) : aiRecs.length === 0 ? (
             <p className="text-sm text-neutral-500">

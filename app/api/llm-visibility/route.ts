@@ -7,6 +7,7 @@ import { llmVisibilityQuerySchema } from "@/lib/validators";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
 import { buildLlmVisibilityDashboard } from "@/lib/services/llm-visibility-dashboard";
+import { ensureLlmPlatformsSeeded } from "@/lib/services/llm-platforms-seed";
 
 function parseCsv(value: string | undefined): string[] {
   if (!value?.trim()) return [];
@@ -59,10 +60,12 @@ export async function GET(req: Request) {
 
     const admin = tryCreateAdminSupabaseClient();
     const db = admin ?? userClient;
+    await ensureLlmPlatformsSeeded();
 
     const days =
       range === "90d" ? 90 : range === "30d" ? 30 : range === "14d" ? 14 : 7;
     const from = new Date(Date.now() - days * 86400_000).toISOString();
+    const fromDate = from.slice(0, 10);
 
     const { data: perfRows, error: perfError } = await db
       .from("llm_brand_performance")
@@ -75,6 +78,26 @@ export async function GET(req: Request) {
 
     if (perfError) {
       return serverErrorResponse(perfError.message, requestId);
+    }
+
+    let perfRowsForDashboard = perfRows ?? [];
+    if (!perfRowsForDashboard.length) {
+      const { data: dailyMetrics } = await db
+        .from("brand_daily_metrics")
+        .select("brand_id, metric_date, visibility_pct, avg_position, ai_model")
+        .eq("brand_id", brandId)
+        .eq("ai_model", "all")
+        .gte("metric_date", fromDate)
+        .order("metric_date", { ascending: true });
+
+      perfRowsForDashboard = (dailyMetrics ?? []).map((row) => ({
+        brand_id: row.brand_id as string,
+        platform_id: null,
+        prompt_id: null,
+        visibility_score: row.visibility_pct != null ? Number(row.visibility_pct) : null,
+        rank_position: row.avg_position != null ? Number(row.avg_position) : null,
+        measured_at: `${row.metric_date as string}T12:00:00.000Z`,
+      }));
     }
 
     const { data: platRows } = await db.from("llm_platforms").select("id, name, display_name");
@@ -99,7 +122,7 @@ export async function GET(req: Request) {
     const payload = buildLlmVisibilityDashboard({
       range,
       brandRows: availableBrands,
-      perfRows: perfRows ?? [],
+      perfRows: perfRowsForDashboard,
       platforms,
       prompts,
       selectedBrandIds,

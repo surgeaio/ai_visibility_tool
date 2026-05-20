@@ -75,6 +75,18 @@ export async function POST(req: Request) {
       return Response.json({ error: "Brand not found", requestId }, { status: 404 });
     }
 
+    const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
+    if (!anthropicKey) {
+      return Response.json(
+        {
+          error:
+            "ANTHROPIC_API_KEY is not configured. Add it in Vercel → Settings → Environment Variables, then redeploy.",
+          requestId,
+        },
+        { status: 503 },
+      );
+    }
+
     const result = await generateVisibilityRecommendationsForBrand(brandId);
     return Response.json({ success: true, ...result, requestId });
   } catch (err) {

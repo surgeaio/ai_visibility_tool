@@ -37,18 +37,35 @@ export default function SentimentPage() {
   useEffect(() => {
     if (!selectedBrandId) {
       setData(null);
+      setLoading(false);
       return;
     }
     setLoading(true);
     setError(null);
-    void fetch(`/api/visibility/sentiment-detail?brandId=${selectedBrandId}`, { cache: "no-store" })
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    void fetch(`/api/visibility/sentiment-detail?brandId=${selectedBrandId}`, {
+      cache: "no-store",
+      signal: controller.signal,
+    })
       .then((r) => r.json())
       .then((json: SentimentPayload & { error?: string }) => {
         if (json.error) throw new Error(json.error);
         setData(json);
       })
-      .catch((e) => setError(e instanceof Error ? e.message : "Failed to load"))
-      .finally(() => setLoading(false));
+      .catch((e) => {
+        const message =
+          e instanceof Error && e.name === "AbortError"
+            ? "Request timed out. Run prompts on LLM Visibility first."
+            : e instanceof Error
+              ? e.message
+              : "Failed to load";
+        setError(message);
+      })
+      .finally(() => {
+        clearTimeout(timeoutId);
+        setLoading(false);
+      });
   }, [selectedBrandId]);
 
   if (!selectedBrandId) {

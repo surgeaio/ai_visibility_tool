@@ -39,15 +39,20 @@ export default function LLMVisibilityPage() {
   const [data, setData] = useState<LlmVisibilityDashboardResponse>(EMPTY_DASHBOARD);
   const [runModalOpen, setRunModalOpen] = useState(false);
   const [runningAll, setRunningAll] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   const fetchAllData = useCallback(async () => {
     if (!selectedBrandId) {
       setData(EMPTY_DASHBOARD);
+      setLoading(false);
       return;
     }
 
     setLoading(true);
     setError(null);
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 15000);
+
     try {
       const params = new URLSearchParams({
         brandId: selectedBrandId,
@@ -66,7 +71,10 @@ export default function LLMVisibilityPage() {
         params.set("focusPromptId", focusPromptId);
       }
 
-      const res = await fetch(`/api/llm-visibility?${params.toString()}`, { cache: "no-store" });
+      const res = await fetch(`/api/llm-visibility?${params.toString()}`, {
+        cache: "no-store",
+        signal: controller.signal,
+      });
       const json = (await res.json()) as LlmVisibilityDashboardResponse & { error?: string };
       if (!res.ok) {
         throw new Error(json.error ?? "Failed to load LLM visibility");
@@ -75,9 +83,16 @@ export default function LLMVisibilityPage() {
       setData(json);
     } catch (err) {
       console.error("Failed to fetch LLM visibility data:", err);
-      setError(err instanceof Error ? err.message : "Failed to load data");
+      const message =
+        err instanceof Error && err.name === "AbortError"
+          ? "Request timed out after 15 seconds. Try again or run prompts first."
+          : err instanceof Error
+            ? err.message
+            : "Failed to load data";
+      setError(message);
       setData(EMPTY_DASHBOARD);
     } finally {
+      clearTimeout(timeoutId);
       setLoading(false);
     }
   }, [
@@ -98,20 +113,8 @@ export default function LLMVisibilityPage() {
   }, [selectedBrandId]);
 
   useEffect(() => {
-    if (data.availableModels.length > 0 && selectedModels.length === 0) {
-      setSelectedModels(data.availableModels.map((m) => m.slug));
-    }
-  }, [data.availableModels, selectedModels.length]);
-
-  useEffect(() => {
     void fetchAllData();
-  }, [fetchAllData]);
-
-  useEffect(() => {
-    if (!focusPromptId && data.prompts[0]) {
-      setFocusPromptId(data.prompts[0].id);
-    }
-  }, [data.prompts, focusPromptId]);
+  }, [fetchAllData, refreshKey]);
 
   async function handleRunPromptsNow() {
     if (!selectedBrandId || runningAll) return;
@@ -137,7 +140,7 @@ export default function LLMVisibilityPage() {
         toast.success(json.message ?? "Prompts queued. Results in 2–3 minutes.");
       } else {
         toast.success(`Completed ${json.completed ?? 0} prompts (${json.failed ?? 0} failed).`);
-        await fetchAllData();
+        setTimeout(() => setRefreshKey((k) => k + 1), 2000);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to run prompts");
@@ -227,7 +230,16 @@ export default function LLMVisibilityPage() {
 
           {error ? (
             <div className="mb-4 rounded-lg border border-red-900/60 bg-red-950/30 px-4 py-3 text-sm text-red-100">
-              {error}
+              <p className="font-medium">Failed to load data</p>
+              <p className="mt-1 text-xs text-red-200/80">{error}</p>
+              <Button
+                className="mt-3"
+                size="sm"
+                variant="secondary"
+                onClick={() => setRefreshKey((k) => k + 1)}
+              >
+                Retry
+              </Button>
             </div>
           ) : null}
 
@@ -268,7 +280,7 @@ export default function LLMVisibilityPage() {
       <RunPromptsModal
         open={runModalOpen}
         onClose={() => setRunModalOpen(false)}
-        onSuccess={() => void fetchAllData()}
+        onSuccess={() => setRefreshKey((k) => k + 1)}
       />
     </div>
   );

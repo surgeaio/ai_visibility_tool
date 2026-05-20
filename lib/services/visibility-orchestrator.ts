@@ -1,5 +1,8 @@
 import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
-import { resolvePlatformIdForProvider } from "@/lib/services/llm-platforms-seed";
+import {
+  ensureLlmPlatformsSeeded,
+  resolvePlatformIdForProvider,
+} from "@/lib/services/llm-platforms-seed";
 import type { LlmKeyProviderName } from "@/lib/ai/llm-provider-factory";
 import { runPromptOnAllModels, type AIModelName } from "@/lib/services/ai-executor";
 import { analyzeResponse } from "@/lib/services/response-analyzer";
@@ -126,6 +129,7 @@ export async function refreshDailyMetrics(brandId: string, date: string) {
 
 export async function runSinglePrompt(opts: RunPromptOptions) {
   const supabase = requireAdmin();
+  await ensureLlmPlatformsSeeded();
 
   const { data: prompt, error: pErr } = await supabase
     .from("prompts")
