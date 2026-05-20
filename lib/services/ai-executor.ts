@@ -1,19 +1,9 @@
-import { adminHasLlmProviders, getAdminLlmProviders } from "@/lib/ai/admin-providers";
-import {
-  getLlmProviderInstance,
-  LLM_KEY_TO_PLATFORM_SLUG,
-  type LlmKeyProviderName,
-} from "@/lib/ai/llm-provider-factory";
+import { callMultipleModels } from "@/lib/ai/call-model";
+import { VISIBILITY_MODELS } from "@/lib/ai/models";
+import { isOpenRouterKey } from "@/lib/ai/openrouter-client";
 import { UserApiKeysRepository } from "@/lib/repositories/user-api-keys.repo";
 
 export type AIModelName = "chatgpt" | "claude" | "gemini" | "perplexity";
-
-const MODEL_TO_PROVIDER: Record<AIModelName, LlmKeyProviderName> = {
-  chatgpt: "openai",
-  claude: "anthropic",
-  gemini: "gemini",
-  perplexity: "perplexity",
-};
 
 export interface AIModelResponse {
   model: AIModelName;
@@ -24,130 +14,112 @@ export interface AIModelResponse {
   status: "success" | "failed";
 }
 
-const TIMEOUT_MS = 60_000;
 const SYSTEM_PROMPT =
   "You are a helpful assistant. When asked about products or services, list specific brand names with brief descriptions.";
 
-function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("Timeout")), ms)),
-  ]);
-}
+/**
+ * Resolve the best available OpenRouter API key.
+ *
+ * Priority:
+ *  1. OPENROUTER_API_KEY env var (admin/shared key)
+ *  2. Per-user stored key that looks like an OpenRouter key
+ *
+ * Returns undefined when no key is found anywhere.
+ */
+async function resolveOpenRouterKey(userId?: string): Promise<string | undefined> {
+  const envKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (envKey) return envKey;
 
-async function runOnModel(model: AIModelName, prompt: string, apiKey: string): Promise<AIModelResponse> {
-  const providerName = MODEL_TO_PROVIDER[model];
-  try {
-    const provider = getLlmProviderInstance(providerName);
-    const response = await withTimeout(
-      provider.execute(prompt, {
-        requestId: `visibility-${model}-${Date.now()}`,
-        apiKey,
-        systemPrompt: SYSTEM_PROMPT,
-        temperature: 0.3,
-        maxTokens: 1500,
-        timeoutMs: TIMEOUT_MS,
-      }),
-      TIMEOUT_MS,
-    );
-
-    const citations = (response.citations ?? []).map((c) => ({
-      url: c.url,
-      title: c.title,
-    }));
-
-    return {
-      model,
-      responseText: response.rawResponse,
-      sources: citations,
-      tokensUsed: (response.tokensUsed?.input ?? 0) + (response.tokensUsed?.output ?? 0),
-      status: "success",
-    };
-  } catch (err) {
-    return {
-      model,
-      responseText: "",
-      sources: [],
-      error: err instanceof Error ? err.message : "Unknown error",
-      status: "failed",
-    };
-  }
-}
-
-function resolveEnvApiKeys(): Map<AIModelName, string> {
-  const map = new Map<AIModelName, string>();
-  const providers = getAdminLlmProviders();
-  for (const p of providers) {
-    const slug = LLM_KEY_TO_PLATFORM_SLUG[p.provider] as AIModelName;
-    if (slug) map.set(slug, p.apiKey);
-  }
-  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (openRouterKey) {
-    if (!map.has("chatgpt")) map.set("chatgpt", openRouterKey);
-    if (!map.has("claude")) map.set("claude", openRouterKey);
-    if (!map.has("gemini")) map.set("gemini", openRouterKey);
-  }
-  if (!map.has("chatgpt") && process.env.OPENAI_API_KEY) map.set("chatgpt", process.env.OPENAI_API_KEY);
-  if (!map.has("claude") && process.env.ANTHROPIC_API_KEY) map.set("claude", process.env.ANTHROPIC_API_KEY);
-  if (!map.has("gemini") && process.env.GOOGLE_AI_API_KEY) map.set("gemini", process.env.GOOGLE_AI_API_KEY);
-  if (!map.has("perplexity") && process.env.PERPLEXITY_API_KEY) {
-    map.set("perplexity", process.env.PERPLEXITY_API_KEY);
-  }
-  return map;
-}
-
-async function resolveApiKeys(userId?: string): Promise<Map<AIModelName, string>> {
-  const map = resolveEnvApiKeys();
-  if (!userId?.trim()) return map;
+  if (!userId?.trim()) return undefined;
 
   try {
     const userKeys = await new UserApiKeysRepository().listActiveLlmKeysDecrypted(userId);
-    for (const k of userKeys) {
-      const slug = LLM_KEY_TO_PLATFORM_SLUG[k.provider] as AIModelName;
-      if (slug && !map.has(slug)) map.set(slug, k.apiKey);
-    }
+    const orKey = userKeys.find((k) => isOpenRouterKey(k.apiKey));
+    if (orKey) return orKey.apiKey;
   } catch (err) {
     console.error(
       "[ai-executor] Failed to load user API keys:",
       err instanceof Error ? err.message : err,
     );
   }
-  return map;
+
+  return undefined;
 }
 
+/**
+ * Run a single prompt on one or more AI models via the OpenRouter gateway.
+ *
+ * Each model runs in parallel; a failure on one never blocks the others.
+ * The return shape is identical to the legacy provider-class path so all
+ * downstream callers (visibility-orchestrator, persist, etc.) remain unchanged.
+ */
 export async function runPromptOnAllModels(
   prompt: string,
   models: AIModelName[] = ["chatgpt", "claude", "gemini", "perplexity"],
   userId?: string,
 ): Promise<AIModelResponse[]> {
-  const keys = await resolveApiKeys(userId);
-  if (keys.size === 0) {
+  const apiKey = await resolveOpenRouterKey(userId);
+
+  if (!apiKey) {
+    console.error("[ai-executor] No OPENROUTER_API_KEY found in env or user settings");
     return models.map((model) => ({
       model,
       responseText: "",
       sources: [],
-      error: "No LLM API keys configured (add keys in Settings or Vercel env)",
-      status: "failed",
+      error:
+        "OPENROUTER_API_KEY not configured. Add it in Vercel → Settings → Environment Variables.",
+      status: "failed" as const,
     }));
   }
 
-  const configuredModels = models.filter((m) => keys.has(m));
-  if (!configuredModels.length) {
+  // Only run models that have a mapping in VISIBILITY_MODELS
+  const runnable = models.filter((m) => Boolean(VISIBILITY_MODELS[m]));
+  const skipped = models.filter((m) => !VISIBILITY_MODELS[m]);
+
+  if (skipped.length) {
+    console.warn(`[ai-executor] No model mapping for: ${skipped.join(", ")} — skipping`);
+  }
+
+  if (!runnable.length) {
     return models.map((model) => ({
       model,
       responseText: "",
       sources: [],
-      error: `${model} API key not configured`,
-      status: "failed",
+      error: "No OpenRouter model ID configured for this slot",
+      status: "failed" as const,
     }));
   }
 
-  console.log(
-    `[ai-executor] Running ${configuredModels.length} model(s) with keys: ${configuredModels.join(", ")}`,
-  );
+  console.log(`[ai-executor] Running ${runnable.length} model(s): ${runnable.join(", ")}`);
 
-  const results = await Promise.all(
-    configuredModels.map(async (model) => runOnModel(model, prompt, keys.get(model)!)),
-  );
-  return results;
+  const results = await callMultipleModels(runnable, prompt, {
+    maxTokens: 1500,
+    temperature: 0.3,
+    systemPrompt: SYSTEM_PROMPT,
+    apiKey,
+  });
+
+  // Build final array preserving original model order, inserting skipped failures
+  const resultMap = new Map(results.map((r) => [r.modelSlug, r]));
+
+  return models.map((model) => {
+    const r = resultMap.get(model);
+    if (!r) {
+      return {
+        model,
+        responseText: "",
+        sources: [],
+        error: "No OpenRouter model ID configured for this slot",
+        status: "failed" as const,
+      };
+    }
+    return {
+      model,
+      responseText: r.responseText,
+      sources: [],
+      tokensUsed: r.tokensUsed,
+      error: r.error,
+      status: r.success ? ("success" as const) : ("failed" as const),
+    };
+  });
 }
