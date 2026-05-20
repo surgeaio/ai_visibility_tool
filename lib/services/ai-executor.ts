@@ -1,9 +1,16 @@
 import { callMultipleModels } from "@/lib/ai/call-model";
-import { VISIBILITY_MODELS } from "@/lib/ai/models";
+import { DEFAULT_VISIBILITY_MODELS, VISIBILITY_MODELS } from "@/lib/ai/models";
 import { isOpenRouterKey } from "@/lib/ai/openrouter-client";
 import { UserApiKeysRepository } from "@/lib/repositories/user-api-keys.repo";
 
-export type AIModelName = "chatgpt" | "claude" | "gemini" | "perplexity";
+export type AIModelName =
+  | "chatgpt"
+  | "claude"
+  | "gemini"
+  | "perplexity"
+  | "llama"
+  | "deepseek"
+  | "mistral";
 
 export interface AIModelResponse {
   model: AIModelName;
@@ -55,7 +62,7 @@ async function resolveOpenRouterKey(userId?: string): Promise<string | undefined
  */
 export async function runPromptOnAllModels(
   prompt: string,
-  models: AIModelName[] = ["chatgpt", "claude", "gemini", "perplexity"],
+  models: AIModelName[] = [...DEFAULT_VISIBILITY_MODELS] as AIModelName[],
   userId?: string,
 ): Promise<AIModelResponse[]> {
   const apiKey = await resolveOpenRouterKey(userId);

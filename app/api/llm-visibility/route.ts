@@ -9,6 +9,7 @@ import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { buildLlmVisibilityDashboard } from "@/lib/services/llm-visibility-dashboard";
 import { loadRecentModelErrors, loadVisibilityPerfRows } from "@/lib/services/llm-visibility-data";
 import { ensureLlmPlatformsSeeded } from "@/lib/services/llm-platforms-seed";
+import { ALL_AVAILABLE_MODELS } from "@/lib/ai/models";
 
 function parseCsv(value: string | undefined): string[] {
   if (!value?.trim()) return [];
@@ -134,8 +135,13 @@ export async function GET(req: Request) {
       }
     }
 
+    // Ensure availableModels is never empty so the UI filter always has options
+    if (!payload.availableModels.length) {
+      payload.availableModels = ALL_AVAILABLE_MODELS;
+    }
+
     console.log(
-      `[llm-visibility] response empty=${payload.empty} chartPoints=${payload.chartData.length} reason=${payload.emptyReason ?? "has_data"}`,
+      `[llm-visibility] response empty=${payload.empty} chartPoints=${payload.chartData.length} reason=${payload.emptyReason ?? "has_data"} models=${payload.availableModels.length}`,
     );
 
     return Response.json({ ...payload, requestId });

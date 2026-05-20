@@ -3,8 +3,10 @@ import type { BrandForDetection } from "@/lib/services/brand-mention-detector";
 import {
   ensureLlmPlatformsSeeded,
   resolvePlatformIdForProvider,
+  resolvePlatformIdBySlug,
 } from "@/lib/services/llm-platforms-seed";
 import type { LlmKeyProviderName } from "@/lib/ai/llm-provider-factory";
+import { DEFAULT_VISIBILITY_MODELS } from "@/lib/ai/models";
 import { runPromptOnAllModels, type AIModelName } from "@/lib/services/ai-executor";
 import { analyzeResponse, analyzeResponseLocal } from "@/lib/services/response-analyzer";
 import {
@@ -17,11 +19,12 @@ import {
   type ModelSaveStats,
 } from "@/lib/services/visibility-persist";
 
-const MODEL_TO_PROVIDER: Record<AIModelName, LlmKeyProviderName> = {
-  chatgpt: "openai",
-  claude: "anthropic",
-  gemini: "gemini",
+const MODEL_TO_PROVIDER: Partial<Record<AIModelName, LlmKeyProviderName>> = {
+  chatgpt:    "openai",
+  claude:     "anthropic",
+  gemini:     "gemini",
   perplexity: "perplexity",
+  // llama, deepseek, mistral route through OpenRouter — resolved by slug
 };
 
 function requireAdmin() {
@@ -88,7 +91,7 @@ export async function refreshDailyMetrics(brandId: string, date: string) {
 
   if (!analyses?.length) return;
 
-  const models = ["all", "chatgpt", "claude", "gemini", "perplexity"] as const;
+  const models = ["all", ...DEFAULT_VISIBILITY_MODELS, "chatgpt", "claude", "gemini", "perplexity"] as const;
 
   for (const model of models) {
     const rows =
@@ -176,7 +179,7 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
     domain: c.domain as string | null,
   }));
 
-  const models = opts.models ?? ["chatgpt", "claude", "gemini", "perplexity"];
+  const models = opts.models ?? ([...DEFAULT_VISIBILITY_MODELS] as AIModelName[]);
   const responses = await runPromptOnAllModels(prompt.text as string, models, opts.userId);
   const runDate = new Date().toISOString().slice(0, 10);
   const results: Array<Record<string, unknown>> = [];
@@ -253,6 +256,7 @@ export async function runAllPromptsForBrand(
   brandId: string,
   triggeredBy: "manual" | "scheduled" | "on_demand" = "manual",
   triggeredByUserId?: string,
+  models?: AIModelName[],
 ) {
   const supabase = requireAdmin();
   await ensureVisibilityTables(supabase);
@@ -298,6 +302,7 @@ export async function runAllPromptsForBrand(
         promptId: p.id as string,
         triggeredBy,
         userId: triggeredByUserId,
+        models,
       });
       if (run.saveStats) {
         totals.responsesSaved += run.saveStats.responsesSaved;
@@ -442,14 +447,30 @@ export async function reanalyzeBrandResponses(brandId: string) {
     }
 
     const modelName = row.ai_model as AIModelName;
-    if (modelName in MODEL_TO_PROVIDER) {
-      const platformId = await resolvePlatformIdForProvider(MODEL_TO_PROVIDER[modelName]);
-      await supabase
-        .from("llm_brand_performance")
-        .delete()
-        .eq("brand_id", brandId)
-        .eq("prompt_id", row.prompt_id as string)
-        .eq("platform_id", platformId);
+    const provider = MODEL_TO_PROVIDER[modelName];
+    if (provider) {
+      try {
+        const platformId = await resolvePlatformIdForProvider(provider);
+        await supabase
+          .from("llm_brand_performance")
+          .delete()
+          .eq("brand_id", brandId)
+          .eq("prompt_id", row.prompt_id as string)
+          .eq("platform_id", platformId);
+      } catch {
+        // ignore platform lookup failures during re-analyze
+      }
+    } else {
+      // OpenRouter-only model (llama/deepseek/mistral) — look up by slug
+      const platformId = await resolvePlatformIdBySlug(modelName);
+      if (platformId) {
+        await supabase
+          .from("llm_brand_performance")
+          .delete()
+          .eq("brand_id", brandId)
+          .eq("prompt_id", row.prompt_id as string)
+          .eq("platform_id", platformId);
+      }
     }
 
     await syncPerformanceFromAnalysis(supabase, {

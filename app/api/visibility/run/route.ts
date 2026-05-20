@@ -5,6 +5,8 @@ import { getRequestId } from "@/lib/api/validate";
 import { runAllPromptsForBrand } from "@/lib/services/visibility-orchestrator";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { DEFAULT_VISIBILITY_MODELS } from "@/lib/ai/models";
+import type { AIModelName } from "@/lib/services/ai-executor";
 
 export const maxDuration = 300;
 
@@ -16,9 +18,13 @@ export async function POST(req: Request) {
       return Response.json({ error: "Unauthorized", requestId }, { status: 401 });
     }
 
-    const body = (await req.json()) as { brandId?: string };
+    const body = (await req.json()) as { brandId?: string; models?: string[] };
     const brandId = body.brandId?.trim();
-    console.log(`[/api/visibility/run] brandId=${brandId} userId=${userId}`);
+    const requestedModels =
+      Array.isArray(body.models) && body.models.length > 0
+        ? (body.models as AIModelName[])
+        : ([...DEFAULT_VISIBILITY_MODELS] as AIModelName[]);
+    console.log(`[/api/visibility/run] brandId=${brandId} userId=${userId} models=${requestedModels.join(",")}`);
 
     if (!brandId) {
       return Response.json(
@@ -65,7 +71,7 @@ export async function POST(req: Request) {
 
     console.log(`[/api/visibility/run] Starting prompts for brand: ${brand.name}`);
 
-    const result = await runAllPromptsForBrand(brandId, "manual", userId);
+    const result = await runAllPromptsForBrand(brandId, "manual", userId, requestedModels);
     const analysesSaved = result.saveStats?.analysesSaved ?? 0;
     const responsesSaved = result.saveStats?.responsesSaved ?? 0;
     const llmFailed = result.saveStats?.llmFailed ?? 0;
