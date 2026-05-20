@@ -7,7 +7,7 @@ import { llmVisibilityQuerySchema } from "@/lib/validators";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { buildLlmVisibilityDashboard } from "@/lib/services/llm-visibility-dashboard";
-import { loadVisibilityPerfRows } from "@/lib/services/llm-visibility-data";
+import { loadRecentModelErrors, loadVisibilityPerfRows } from "@/lib/services/llm-visibility-data";
 import { ensureLlmPlatformsSeeded } from "@/lib/services/llm-platforms-seed";
 
 function parseCsv(value: string | undefined): string[] {
@@ -123,8 +123,19 @@ export async function GET(req: Request) {
       focusPromptId: focusPromptId ?? null,
     });
 
+    if (payload.empty) {
+      const diagnostics = await loadRecentModelErrors(db, selectedBrandIds, from);
+      if (diagnostics.errors.length > 0 || (diagnostics.responsesInRange ?? 0) > 0) {
+        payload.emptyReason = diagnostics.errors.length > 0 ? "runs_failed" : "no_data";
+        payload.recentModelErrors = diagnostics.errors;
+        payload.responsesInRange = diagnostics.responsesInRange;
+      } else {
+        payload.emptyReason = "no_data";
+      }
+    }
+
     console.log(
-      `[llm-visibility] response empty=${payload.empty} chartPoints=${payload.chartData.length}`,
+      `[llm-visibility] response empty=${payload.empty} chartPoints=${payload.chartData.length} reason=${payload.emptyReason ?? "has_data"}`,
     );
 
     return Response.json({ ...payload, requestId });

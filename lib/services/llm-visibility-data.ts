@@ -137,3 +137,52 @@ export async function loadVisibilityPerfRows(
   console.log("[llm-visibility-data] no visibility rows in range");
   return [];
 }
+
+export async function loadRecentModelErrors(
+  db: SupabaseClient<Database>,
+  brandIds: string[],
+  fromIso: string,
+  limit = 40,
+): Promise<{ errors: Array<{ model: string; error: string }>; responsesInRange: number }> {
+  const { count, error: countErr } = await db
+    .from("chat_responses")
+    .select("*", { count: "exact", head: true })
+    .in("brand_id", brandIds)
+    .gte("created_at", fromIso);
+
+  if (countErr) {
+    return { errors: [], responsesInRange: 0 };
+  }
+
+  const { data, error } = await db
+    .from("chat_responses")
+    .select("ai_model, error_message, status, created_at")
+    .in("brand_id", brandIds)
+    .gte("created_at", fromIso)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error || !data?.length) {
+    return { errors: [], responsesInRange: count ?? 0 };
+  }
+
+  const byModel = new Map<string, string>();
+  for (const row of data) {
+    const model = row.ai_model as string;
+    if (byModel.has(model)) continue;
+    if (row.status === "success") {
+      byModel.set(model, "");
+      continue;
+    }
+    const msg = (row.error_message as string)?.trim();
+    if (msg) {
+      byModel.set(model, msg.length > 200 ? `${msg.slice(0, 200)}…` : msg);
+    }
+  }
+
+  const errors = [...byModel.entries()]
+    .filter(([, err]) => err.length > 0)
+    .map(([model, error]) => ({ model, error }));
+
+  return { errors, responsesInRange: count ?? 0 };
+}

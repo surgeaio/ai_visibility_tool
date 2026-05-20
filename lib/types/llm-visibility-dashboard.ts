@@ -22,8 +22,17 @@ export type LlmVisibilityPromptPerformance = {
   dates: Array<Record<string, string | number | null>>;
 };
 
+export type LlmVisibilityModelError = {
+  model: string;
+  error: string;
+};
+
 export type LlmVisibilityDashboardResponse = {
   empty: boolean;
+  /** When empty=true, explains why (e.g. recent runs failed). */
+  emptyReason?: "no_data" | "runs_failed";
+  recentModelErrors?: LlmVisibilityModelError[];
+  responsesInRange?: number;
   chartData: LlmVisibilityChartRow[];
   brands: LlmVisibilityBrand[];
   availableBrands: LlmVisibilityBrand[];
