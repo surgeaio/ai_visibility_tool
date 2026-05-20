@@ -67,11 +67,15 @@ export async function POST(req: Request) {
 
     const result = await runAllPromptsForBrand(brandId, "manual", userId);
     const allFailed = (result.completed ?? 0) === 0 && (result.failed ?? 0) > 0;
+    const noDataSaved = (result.saveStats?.analysesSaved ?? 0) === 0;
 
     return Response.json({
-      success: !allFailed,
+      success: !allFailed && !noDataSaved,
       queued: false,
       ...result,
+      warning: noDataSaved
+        ? "Prompts ran but no analysis rows were saved. Check Vercel logs for [visibility-persist] errors or apply visibility migrations in Supabase."
+        : undefined,
       requestId,
     });
   } catch (err) {

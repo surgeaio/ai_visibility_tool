@@ -70,7 +70,8 @@ function parseAnalyzerJson(rawText: string): { brands_in_order: BrandMention[] }
   }
 }
 
-function analyzeLocally(input: AnalyzerInput): AnalyzerOutput {
+/** Local-only brand detection (no Anthropic). Safe fallback when API analysis fails. */
+export function analyzeResponseLocal(input: AnalyzerInput): AnalyzerOutput {
   const detection = detectBrandMention(input.responseText, input.ownBrand);
   const sentimentScore = detection.mentioned
     ? calculateBrandSentiment(input.responseText, input.ownBrand)
@@ -94,7 +95,7 @@ function analyzeLocally(input: AnalyzerInput): AnalyzerOutput {
 }
 
 export async function analyzeResponse(input: AnalyzerInput): Promise<AnalyzerOutput> {
-  const local = analyzeLocally(input);
+  const local = analyzeResponseLocal(input);
   const nameVariations = buildBrandNameVariations(input.ownBrand);
   const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
 

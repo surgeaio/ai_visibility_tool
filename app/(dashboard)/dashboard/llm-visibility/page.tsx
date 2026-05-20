@@ -160,9 +160,14 @@ export default function LLMVisibilityPage() {
         failed?: number;
         error?: string;
         message?: string;
+        warning?: string;
+        saveStats?: { analysesSaved?: number; responsesSaved?: number };
       };
       if (!res.ok || !json.success) {
-        throw new Error(json.error ?? json.message ?? "Run failed");
+        throw new Error(json.warning ?? json.error ?? json.message ?? "Run failed");
+      }
+      if (json.warning) {
+        toast.warning(json.warning);
       }
       if (json.queued) {
         toast.success(json.message ?? "Prompts queued. Results in 2–3 minutes.");
