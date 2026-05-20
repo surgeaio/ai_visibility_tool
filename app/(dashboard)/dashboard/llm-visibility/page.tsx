@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Download, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { RunPromptsModal } from "./_components/RunPromptsModal";
@@ -41,81 +41,21 @@ export default function LLMVisibilityPage() {
   const [runningAll, setRunningAll] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
-  const fetchGenerationRef = useRef(0);
+  const [filterVersion, setFilterVersion] = useState(0);
 
-  const fetchAllData = useCallback(async () => {
-    if (!selectedBrandId) {
-      setData(EMPTY_DASHBOARD);
-      setLoading(false);
-      return;
-    }
+  const filterRef = useRef({
+    selectedBrandIds: [] as string[],
+    selectedModels: [] as string[],
+    selectedPrompts: [] as string[],
+    focusPromptId: null as string | null,
+  });
 
-    const generation = ++fetchGenerationRef.current;
-    setLoading(true);
-    setError(null);
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
-
-    try {
-      const params = new URLSearchParams({
-        brandId: selectedBrandId,
-        range: dateRange,
-      });
-      if (selectedBrandIds.length) {
-        params.set("brandIds", selectedBrandIds.join(","));
-      }
-      if (selectedModels.length) {
-        params.set("models", selectedModels.join(","));
-      }
-      if (selectedPrompts.length) {
-        params.set("promptIds", selectedPrompts.join(","));
-      }
-      if (focusPromptId) {
-        params.set("focusPromptId", focusPromptId);
-      }
-
-      const res = await fetch(`/api/llm-visibility?${params.toString()}`, {
-        cache: "no-store",
-        signal: controller.signal,
-      });
-      const json = (await res.json()) as LlmVisibilityDashboardResponse & { error?: string };
-      if (!res.ok) {
-        throw new Error(json.error ?? "Failed to load LLM visibility");
-      }
-
-      if (generation !== fetchGenerationRef.current) return;
-
-      console.log("[LLM Visibility] Data received:", {
-        empty: json.empty,
-        chartPoints: json.chartData?.length ?? 0,
-        byDate: json.byDate?.length ?? 0,
-      });
-      setData(json);
-    } catch (err) {
-      if (generation !== fetchGenerationRef.current) return;
-      console.error("Failed to fetch LLM visibility data:", err);
-      const message =
-        err instanceof Error && err.name === "AbortError"
-          ? "Request timed out after 15 seconds. Try again or run prompts first."
-          : err instanceof Error
-            ? err.message
-            : "Failed to load data";
-      setError(message);
-      setData(EMPTY_DASHBOARD);
-    } finally {
-      clearTimeout(timeoutId);
-      if (generation === fetchGenerationRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [
-    selectedBrandId,
-    dateRange,
+  filterRef.current = {
     selectedBrandIds,
     selectedModels,
     selectedPrompts,
     focusPromptId,
-  ]);
+  };
 
   useEffect(() => {
     if (!selectedBrandId) return;
@@ -126,23 +66,72 @@ export default function LLMVisibilityPage() {
   }, [selectedBrandId]);
 
   useEffect(() => {
-    void fetchAllData();
-  }, [fetchAllData, refreshKey]);
+    if (!selectedBrandId) {
+      setData(EMPTY_DASHBOARD);
+      setLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 15000);
+
+    (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const f = filterRef.current;
+        const params = new URLSearchParams({
+          brandId: selectedBrandId,
+          range: dateRange,
+        });
+        if (f.selectedBrandIds.length) params.set("brandIds", f.selectedBrandIds.join(","));
+        if (f.selectedModels.length) params.set("models", f.selectedModels.join(","));
+        if (f.selectedPrompts.length) params.set("promptIds", f.selectedPrompts.join(","));
+        if (f.focusPromptId) params.set("focusPromptId", f.focusPromptId);
+
+        const res = await fetch(`/api/llm-visibility?${params.toString()}`, {
+          cache: "no-store",
+          signal: controller.signal,
+        });
+        const json = (await res.json()) as LlmVisibilityDashboardResponse & { error?: string };
+        if (!res.ok) throw new Error(json.error ?? "Failed to load LLM visibility");
+        if (cancelled) return;
+
+        console.log("[LLM Visibility] Data received:", {
+          empty: json.empty,
+          chartPoints: json.chartData?.length ?? 0,
+          byDate: json.byDate?.length ?? 0,
+        });
+        setData(json);
+      } catch (err) {
+        if (!cancelled) {
+          const message =
+            err instanceof Error && err.name === "AbortError"
+              ? "Request timed out after 15 seconds. Try again or run prompts first."
+              : err instanceof Error
+                ? err.message
+                : "Failed to load data";
+          setError(message);
+          setData(EMPTY_DASHBOARD);
+        }
+      } finally {
+        clearTimeout(timer);
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+      controller.abort();
+      clearTimeout(timer);
+    };
+  }, [selectedBrandId, dateRange, refreshKey, filterVersion]);
 
   useEffect(() => {
-    if (!loading) return;
-    const forceStop = setTimeout(() => {
-      console.warn("[LLM Visibility] Force stopping loading after 20s");
-      setLoading(false);
-    }, 20000);
-    return () => clearTimeout(forceStop);
-  }, [loading]);
-
-  function scheduleDataRefresh() {
-    setRefreshKey((k) => k + 1);
-    setTimeout(() => setRefreshKey((k) => k + 1), 3000);
-    setTimeout(() => setRefreshKey((k) => k + 1), 6000);
-  }
+    const t = setTimeout(() => setFilterVersion((v) => v + 1), 400);
+    return () => clearTimeout(t);
+  }, [selectedBrandIds, selectedModels, selectedPrompts, focusPromptId]);
 
   async function handleRunPromptsNow() {
     if (!selectedBrandId || runningAll) return;
@@ -163,8 +152,8 @@ export default function LLMVisibilityPage() {
         warning?: string;
         saveStats?: { analysesSaved?: number; responsesSaved?: number };
       };
-      if (!res.ok || !json.success) {
-        throw new Error(json.warning ?? json.error ?? json.message ?? "Run failed");
+      if (!res.ok) {
+        throw new Error(json.error ?? json.message ?? "Run failed");
       }
       if (json.warning) {
         toast.warning(json.warning);
@@ -172,8 +161,11 @@ export default function LLMVisibilityPage() {
       if (json.queued) {
         toast.success(json.message ?? "Prompts queued. Results in 2–3 minutes.");
       } else {
-        toast.success(`Completed ${json.completed ?? 0} prompts (${json.failed ?? 0} failed).`);
-        scheduleDataRefresh();
+        const saved = json.saveStats?.analysesSaved ?? 0;
+        toast.success(
+          `Completed ${json.completed ?? 0} prompts (${json.failed ?? 0} failed). ${saved > 0 ? `${saved} analyses saved.` : ""}`,
+        );
+        setRefreshKey((k) => k + 1);
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to run prompts");
@@ -330,6 +322,7 @@ export default function LLMVisibilityPage() {
                   prompts={data.prompts}
                   onSelectPrompt={(id) => {
                     setFocusPromptId(id);
+                    setFilterVersion((v) => v + 1);
                   }}
                 />
               )}
@@ -341,7 +334,7 @@ export default function LLMVisibilityPage() {
       <RunPromptsModal
         open={runModalOpen}
         onClose={() => setRunModalOpen(false)}
-        onSuccess={scheduleDataRefresh}
+        onSuccess={() => setRefreshKey((k) => k + 1)}
       />
     </div>
   );

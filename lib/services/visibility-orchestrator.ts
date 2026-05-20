@@ -71,6 +71,8 @@ export interface RunPromptOptions {
   promptId: string;
   models?: AIModelName[];
   triggeredBy?: "manual" | "scheduled" | "on_demand";
+  /** Authenticated user id — used to load per-user LLM API keys when env keys are missing. */
+  userId?: string;
 }
 
 export async function refreshDailyMetrics(brandId: string, date: string) {
@@ -173,7 +175,7 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
   }));
 
   const models = opts.models ?? ["chatgpt", "claude", "gemini", "perplexity"];
-  const responses = await runPromptOnAllModels(prompt.text as string, models);
+  const responses = await runPromptOnAllModels(prompt.text as string, models, opts.userId);
   const runDate = new Date().toISOString().slice(0, 10);
   const results: Array<Record<string, unknown>> = [];
   const saveStats: ModelSaveStats = {
@@ -186,19 +188,15 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
   for (const resp of responses) {
     if (resp.status === "failed" || !resp.responseText) {
       saveStats.failed += 1;
-      if (
-        await persistFailedModelResponse(supabase, {
-          brandId: opts.brandId,
-          promptId: opts.promptId,
-          promptText: prompt.text as string,
-          runDate,
-          model: resp.model,
-          error: resp.error,
-          sources: resp.sources,
-        })
-      ) {
-        saveStats.responsesSaved += 1;
-      }
+      await persistFailedModelResponse(supabase, {
+        brandId: opts.brandId,
+        promptId: opts.promptId,
+        promptText: prompt.text as string,
+        runDate,
+        model: resp.model,
+        error: resp.error,
+        sources: resp.sources,
+      });
       results.push({ model: resp.model, status: "failed", error: resp.error });
       continue;
     }
@@ -216,14 +214,24 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
       tokensUsed: resp.tokensUsed,
     });
 
-    saveStats.responsesSaved += 1;
-    saveStats.analysesSaved += persisted.stats.analysesSaved;
-    saveStats.perfSaved += persisted.stats.perfSaved;
+    if (persisted.responseSaved) {
+      saveStats.responsesSaved += 1;
+      saveStats.analysesSaved += persisted.stats.analysesSaved;
+      saveStats.perfSaved += persisted.stats.perfSaved;
+    }
+    if (!persisted.analysisSaved) {
+      saveStats.failed += 1;
+      if (persisted.responseSaved) {
+        console.error(
+          `[visibility-orchestrator] chat_analysis not saved model=${resp.model} prompt=${opts.promptId}`,
+        );
+      }
+    }
 
     results.push({
       model: resp.model,
-      status: persisted.ok ? "success" : "save_partial",
-      saved: persisted.ok,
+      status: persisted.analysisSaved ? "success" : "save_partial",
+      saved: persisted.analysisSaved,
     });
   }
 
@@ -276,7 +284,12 @@ export async function runAllPromptsForBrand(
 
   for (const p of prompts) {
     try {
-      const run = await runSinglePrompt({ brandId, promptId: p.id as string, triggeredBy });
+      const run = await runSinglePrompt({
+        brandId,
+        promptId: p.id as string,
+        triggeredBy,
+        userId: triggeredByUserId,
+      });
       if (run.saveStats) {
         totals.responsesSaved += run.saveStats.responsesSaved;
         totals.analysesSaved += run.saveStats.analysesSaved;
@@ -307,6 +320,20 @@ export async function runAllPromptsForBrand(
   }
 
   const today = new Date().toISOString().slice(0, 10);
+
+  if (totals.analysesSaved === 0 && totals.responsesSaved > 0) {
+    console.log(
+      `[visibility-orchestrator] No chat_analysis rows — auto re-analyze from ${totals.responsesSaved} chat_responses`,
+    );
+    try {
+      const re = await reanalyzeBrandResponses(brandId);
+      totals.analysesSaved = re.updated;
+      console.log(`[visibility-orchestrator] Auto re-analyze updated ${re.updated} rows`);
+    } catch (reErr) {
+      console.error("[visibility-orchestrator] Auto re-analyze failed:", reErr);
+    }
+  }
+
   await refreshDailyMetrics(brandId, today);
   console.log(
     `[visibility-orchestrator] Run complete brand=${brandId} completed=${completed} failed=${failed} saves=${JSON.stringify(totals)}`,
@@ -374,6 +401,27 @@ export async function reanalyzeBrandResponses(brandId: string) {
 
     await supabase.from("chat_analysis").delete().eq("chat_response_id", row.id);
 
+    const sentiment = {
+      score: analysis.brandSentiment,
+      label: analysis.brandSentimentLabel,
+    };
+    const clamped =
+      sentiment.score != null
+        ? Math.max(0, Math.min(100, Math.round(sentiment.score)))
+        : null;
+    const label =
+      sentiment.label === "positive" ||
+      sentiment.label === "neutral" ||
+      sentiment.label === "negative"
+        ? sentiment.label
+        : clamped != null
+          ? clamped >= 60
+            ? "positive"
+            : clamped <= 40
+              ? "negative"
+              : "neutral"
+          : null;
+
     const { error: insertErr } = await supabase.from("chat_analysis").insert({
       chat_response_id: row.id,
       brand_id: brandId,
@@ -382,8 +430,8 @@ export async function reanalyzeBrandResponses(brandId: string) {
       run_date: runDate,
       brand_mentioned: analysis.brandMentioned,
       brand_position: analysis.brandPosition,
-      brand_sentiment: analysis.brandSentiment,
-      brand_sentiment_label: analysis.brandSentimentLabel,
+      brand_sentiment: clamped,
+      brand_sentiment_label: label,
       brand_mention_context: analysis.brandMentionContext,
       all_brands_mentioned: analysis.allBrandsMentioned,
       sources_used: analysis.domainsReferenced.map((d) => ({ domain: d })),

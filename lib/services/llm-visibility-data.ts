@@ -30,6 +30,36 @@ function visibilityFromMention(mentioned: boolean, position: number | null, sent
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
+function mapAnalysisRows(
+  analyses: Array<{
+    brand_id: string;
+    prompt_id: string;
+    ai_model: string;
+    brand_mentioned: boolean | null;
+    brand_position: number | null;
+    brand_sentiment: number | null;
+    run_date: string;
+    created_at: string | null;
+  }>,
+): VisibilityPerfRow[] {
+  return analyses.map((row) => {
+    const mentioned = Boolean(row.brand_mentioned);
+    const sentiment = row.brand_sentiment != null ? Number(row.brand_sentiment) : null;
+    const position = row.brand_position != null ? Number(row.brand_position) : null;
+    const runDate = row.run_date ?? (row.created_at as string).slice(0, 10);
+
+    return {
+      brand_id: row.brand_id,
+      platform_id: null,
+      prompt_id: row.prompt_id,
+      visibility_score: visibilityFromMention(mentioned, position, sentiment),
+      rank_position: position,
+      measured_at: `${runDate}T12:00:00.000Z`,
+      ai_model_slug: row.ai_model,
+    };
+  });
+}
+
 export async function loadVisibilityPerfRows(
   db: SupabaseClient<Database>,
   brandIds: string[],
@@ -37,6 +67,35 @@ export async function loadVisibilityPerfRows(
   fromDate: string,
 ): Promise<VisibilityPerfRow[]> {
   const primaryBrandId = brandIds[0];
+
+  const { data: analyses, error: analysisError } = await db
+    .from("chat_analysis")
+    .select(
+      "brand_id, prompt_id, ai_model, brand_mentioned, brand_position, brand_sentiment, run_date, created_at",
+    )
+    .in("brand_id", brandIds)
+    .gte("created_at", fromIso)
+    .order("created_at", { ascending: true });
+
+  if (analysisError) {
+    console.error("[llm-visibility-data] chat_analysis error:", analysisError.message);
+  } else if (analyses?.length) {
+    console.log(`[llm-visibility-data] chat_analysis: ${analyses.length} rows (primary source)`);
+    return mapAnalysisRows(analyses);
+  }
+
+  const { count: recentResponseCount, error: respCountErr } = await db
+    .from("chat_responses")
+    .select("*", { count: "exact", head: true })
+    .in("brand_id", brandIds)
+    .gte("created_at", fromIso);
+
+  if (!respCountErr && (recentResponseCount ?? 0) > 0) {
+    console.log(
+      `[llm-visibility-data] skipping stale llm_brand_performance — ${recentResponseCount} chat_responses in range but 0 chat_analysis`,
+    );
+    return [];
+  }
 
   const { data: perfRows, error: perfError } = await db
     .from("llm_brand_performance")
@@ -48,7 +107,7 @@ export async function loadVisibilityPerfRows(
   if (perfError) {
     console.error("[llm-visibility-data] llm_brand_performance error:", perfError.message);
   } else if (perfRows?.length) {
-    console.log(`[llm-visibility-data] llm_brand_performance: ${perfRows.length} rows`);
+    console.log(`[llm-visibility-data] llm_brand_performance fallback: ${perfRows.length} rows`);
     return perfRows as VisibilityPerfRow[];
   }
 
@@ -75,38 +134,6 @@ export async function loadVisibilityPerfRows(
     }));
   }
 
-  const { data: analyses, error: analysisError } = await db
-    .from("chat_analysis")
-    .select(
-      "brand_id, prompt_id, ai_model, brand_mentioned, brand_position, brand_sentiment, run_date, created_at",
-    )
-    .in("brand_id", brandIds)
-    .gte("created_at", fromIso)
-    .order("created_at", { ascending: true });
-
-  if (analysisError) {
-    console.error("[llm-visibility-data] chat_analysis error:", analysisError.message);
-    return [];
-  }
-
-  console.log(`[llm-visibility-data] chat_analysis fallback: ${analyses?.length ?? 0} rows`);
-
-  return (analyses ?? []).map((row) => {
-    const mentioned = Boolean(row.brand_mentioned);
-    const sentiment =
-      row.brand_sentiment != null ? Number(row.brand_sentiment) : null;
-    const position =
-      row.brand_position != null ? Number(row.brand_position) : null;
-    const runDate = (row.run_date as string) ?? (row.created_at as string).slice(0, 10);
-
-    return {
-      brand_id: row.brand_id as string,
-      platform_id: null,
-      prompt_id: row.prompt_id as string,
-      visibility_score: visibilityFromMention(mentioned, position, sentiment),
-      rank_position: position,
-      measured_at: `${runDate}T12:00:00.000Z`,
-      ai_model_slug: row.ai_model as string,
-    };
-  });
+  console.log("[llm-visibility-data] no visibility rows in range");
+  return [];
 }

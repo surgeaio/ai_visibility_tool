@@ -29,6 +29,22 @@ function logDbError(label: string, error: { message: string; code?: string; deta
   console.error(`[visibility-persist] ${label}:`, error.message, error.code ?? "", error.details ?? "");
 }
 
+const SENTIMENT_LABELS = new Set(["positive", "neutral", "negative"]);
+
+function normalizeSentiment(
+  score: number | null,
+  label: string | null,
+): { score: number | null; label: "positive" | "neutral" | "negative" | null } {
+  if (score == null) return { score: null, label: null };
+  const clamped = Math.max(0, Math.min(100, Math.round(score)));
+  const normalizedLabel =
+    label && SENTIMENT_LABELS.has(label) ? (label as "positive" | "neutral" | "negative") : null;
+  if (normalizedLabel) return { score: clamped, label: normalizedLabel };
+  if (clamped >= 60) return { score: clamped, label: "positive" };
+  if (clamped <= 40) return { score: clamped, label: "negative" };
+  return { score: clamped, label: "neutral" };
+}
+
 export async function ensureVisibilityTables(
   supabase: SupabaseClient<Database>,
 ): Promise<void> {
@@ -80,8 +96,13 @@ async function insertChatAnalysis(
     runDate: string;
     analysis: AnalyzerOutput;
   },
-): Promise<boolean> {
-  const { error } = await supabase.from("chat_analysis").insert({
+): Promise<{ ok: boolean; error?: string }> {
+  const sentiment = normalizeSentiment(
+    params.analysis.brandSentiment,
+    params.analysis.brandSentimentLabel,
+  );
+
+  const payload = {
     chat_response_id: params.chatResponseId,
     brand_id: params.brandId,
     prompt_id: params.promptId,
@@ -89,21 +110,31 @@ async function insertChatAnalysis(
     run_date: params.runDate,
     brand_mentioned: params.analysis.brandMentioned,
     brand_position: params.analysis.brandPosition,
-    brand_sentiment: params.analysis.brandSentiment,
-    brand_sentiment_label: params.analysis.brandSentimentLabel,
+    brand_sentiment: sentiment.score,
+    brand_sentiment_label: sentiment.label,
     brand_mention_context: params.analysis.brandMentionContext,
-    all_brands_mentioned: params.analysis.allBrandsMentioned,
+    all_brands_mentioned: Array.isArray(params.analysis.allBrandsMentioned)
+      ? params.analysis.allBrandsMentioned
+      : [],
     sources_used: params.analysis.domainsReferenced.map((d) => ({ domain: d })),
-  });
+  };
+
+  const { data: inserted, error } = await supabase
+    .from("chat_analysis")
+    .insert(payload)
+    .select("id")
+    .single();
 
   if (error) {
     logDbError("chat_analysis insert", error);
-    return false;
+    console.error("[visibility-persist] chat_analysis payload keys:", Object.keys(payload));
+    return { ok: false, error: `${error.code ?? "error"}: ${error.message}` };
   }
+
   console.log(
-    `[visibility-persist] chat_analysis saved model=${params.aiModel} mentioned=${params.analysis.brandMentioned}`,
+    `[visibility-persist] chat_analysis saved id=${inserted?.id} model=${params.aiModel} mentioned=${params.analysis.brandMentioned}`,
   );
-  return true;
+  return { ok: true };
 }
 
 async function insertLlmPerformance(
@@ -168,7 +199,11 @@ export async function persistSuccessfulModelResponse(
     sources: Array<{ url: string; title?: string }>;
     tokensUsed?: number;
   },
-): Promise<{ ok: boolean; stats: Pick<ModelSaveStats, "analysesSaved" | "perfSaved"> }> {
+): Promise<{
+  responseSaved: boolean;
+  analysisSaved: boolean;
+  stats: Pick<ModelSaveStats, "analysesSaved" | "perfSaved">;
+}> {
   const stats = { analysesSaved: 0, perfSaved: 0 };
 
   const { data: savedResp, error: saveErr } = await supabase
@@ -189,7 +224,7 @@ export async function persistSuccessfulModelResponse(
 
   if (saveErr || !savedResp) {
     logDbError("chat_responses insert", saveErr ?? { message: "no row returned" });
-    return { ok: false, stats };
+    return { responseSaved: false, analysisSaved: false, stats };
   }
 
   console.log(`[visibility-persist] chat_responses saved id=${savedResp.id} model=${params.model}`);
@@ -219,15 +254,18 @@ export async function persistSuccessfulModelResponse(
     if (srcErr) logDbError("source_appearances insert", srcErr);
   }
 
-  if (await insertChatAnalysis(supabase, {
+  const analysisResult = await insertChatAnalysis(supabase, {
     chatResponseId: savedResp.id,
     brandId: params.brandId,
     promptId: params.promptId,
     aiModel: params.model,
     runDate: params.runDate,
     analysis,
-  })) {
+  });
+  if (analysisResult.ok) {
     stats.analysesSaved = 1;
+  } else if (analysisResult.error) {
+    console.error(`[visibility-persist] analysis not saved for ${params.model}:`, analysisResult.error);
   }
 
   if (
@@ -242,7 +280,11 @@ export async function persistSuccessfulModelResponse(
     stats.perfSaved = 1;
   }
 
-  return { ok: stats.analysesSaved > 0, stats };
+  return {
+    responseSaved: true,
+    analysisSaved: stats.analysesSaved > 0,
+    stats,
+  };
 }
 
 export async function syncPerformanceFromAnalysis(

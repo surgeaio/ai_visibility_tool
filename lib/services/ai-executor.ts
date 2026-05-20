@@ -4,6 +4,7 @@ import {
   LLM_KEY_TO_PLATFORM_SLUG,
   type LlmKeyProviderName,
 } from "@/lib/ai/llm-provider-factory";
+import { UserApiKeysRepository } from "@/lib/repositories/user-api-keys.repo";
 
 export type AIModelName = "chatgpt" | "claude" | "gemini" | "perplexity";
 
@@ -73,7 +74,7 @@ async function runOnModel(model: AIModelName, prompt: string, apiKey: string): P
   }
 }
 
-function resolveApiKeys(): Map<AIModelName, string> {
+function resolveEnvApiKeys(): Map<AIModelName, string> {
   const map = new Map<AIModelName, string>();
   const providers = getAdminLlmProviders();
   for (const p of providers) {
@@ -89,21 +90,40 @@ function resolveApiKeys(): Map<AIModelName, string> {
   return map;
 }
 
+async function resolveApiKeys(userId?: string): Promise<Map<AIModelName, string>> {
+  const map = resolveEnvApiKeys();
+  if (!userId?.trim()) return map;
+
+  try {
+    const userKeys = await new UserApiKeysRepository().listActiveLlmKeysDecrypted(userId);
+    for (const k of userKeys) {
+      const slug = LLM_KEY_TO_PLATFORM_SLUG[k.provider] as AIModelName;
+      if (slug && !map.has(slug)) map.set(slug, k.apiKey);
+    }
+  } catch (err) {
+    console.error(
+      "[ai-executor] Failed to load user API keys:",
+      err instanceof Error ? err.message : err,
+    );
+  }
+  return map;
+}
+
 export async function runPromptOnAllModels(
   prompt: string,
   models: AIModelName[] = ["chatgpt", "claude", "gemini", "perplexity"],
+  userId?: string,
 ): Promise<AIModelResponse[]> {
-  if (!adminHasLlmProviders() && resolveApiKeys().size === 0) {
+  const keys = await resolveApiKeys(userId);
+  if (keys.size === 0) {
     return models.map((model) => ({
       model,
       responseText: "",
       sources: [],
-      error: "No LLM API keys configured",
+      error: "No LLM API keys configured (add keys in Settings or Vercel env)",
       status: "failed",
     }));
   }
-
-  const keys = resolveApiKeys();
   const results = await Promise.all(
     models.map(async (model) => {
       const key = keys.get(model);

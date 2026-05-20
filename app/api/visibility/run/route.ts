@@ -67,15 +67,30 @@ export async function POST(req: Request) {
 
     const result = await runAllPromptsForBrand(brandId, "manual", userId);
     const allFailed = (result.completed ?? 0) === 0 && (result.failed ?? 0) > 0;
-    const noDataSaved = (result.saveStats?.analysesSaved ?? 0) === 0;
+    const analysesSaved = result.saveStats?.analysesSaved ?? 0;
+    const responsesSaved = result.saveStats?.responsesSaved ?? 0;
+    const modelFailures = result.saveStats?.failed ?? 0;
+    const noAnalysis =
+      analysesSaved === 0 && responsesSaved === 0
+        ? modelFailures > 0 || (result.failed ?? 0) > 0
+          ? "no_llm_keys"
+          : "no_llm_responses"
+        : analysesSaved === 0
+          ? "analysis_insert_failed"
+          : null;
 
     return Response.json({
-      success: !allFailed && !noDataSaved,
+      success: !allFailed && analysesSaved > 0,
       queued: false,
       ...result,
-      warning: noDataSaved
-        ? "Prompts ran but no analysis rows were saved. Check Vercel logs for [visibility-persist] errors or apply visibility migrations in Supabase."
-        : undefined,
+      warning:
+        noAnalysis === "analysis_insert_failed"
+          ? "LLM responses were saved but analysis could not be written. Use Re-analyze saved or check Supabase migrations."
+          : noAnalysis === "no_llm_keys"
+            ? "No LLM API keys configured. Add keys in Settings → API Keys or set OPENAI_API_KEY / ANTHROPIC_API_KEY on Vercel."
+            : noAnalysis === "no_llm_responses"
+              ? "No successful LLM responses in this run. Check Vercel logs for model errors."
+              : undefined,
       requestId,
     });
   } catch (err) {
