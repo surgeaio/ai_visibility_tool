@@ -12,7 +12,7 @@ import { PromptPerformanceTable } from "@/components/llm-visibility/PromptPerfor
 import { Button } from "@/components/ui/button";
 import type { LlmVisibilityDashboardResponse } from "@/lib/types/llm-visibility-dashboard";
 import { useSelectedBrand } from "@/lib/context/brand-context";
-import { ALL_AVAILABLE_MODELS, DEFAULT_VISIBILITY_MODELS } from "@/lib/ai/models";
+import { ALL_AVAILABLE_MODELS } from "@/lib/ai/models";
 
 const EMPTY_DASHBOARD: LlmVisibilityDashboardResponse = {
   empty: true,
@@ -31,7 +31,7 @@ export default function LLMVisibilityPage() {
 
   const [dateRange, setDateRange] = useState("7d");
   const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>([]);
-  const [selectedModels, setSelectedModels] = useState<string[]>([...DEFAULT_VISIBILITY_MODELS]);
+  const [selectedModels, setSelectedModels] = useState<string[]>(["chatgpt", "claude", "gemini", "perplexity"]);
   const [selectedPrompts, setSelectedPrompts] = useState<string[]>([]);
   const [focusPromptId, setFocusPromptId] = useState<string | null>(null);
 
@@ -46,7 +46,7 @@ export default function LLMVisibilityPage() {
 
   const filterRef = useRef({
     selectedBrandIds: [] as string[],
-    selectedModels: [...DEFAULT_VISIBILITY_MODELS] as string[],
+    selectedModels: ["chatgpt", "claude", "gemini", "perplexity"] as string[],
     selectedPrompts: [] as string[],
     focusPromptId: null as string | null,
   });
@@ -61,7 +61,7 @@ export default function LLMVisibilityPage() {
   useEffect(() => {
     if (!selectedBrandId) return;
     setSelectedBrandIds([selectedBrandId]);
-    setSelectedModels([...DEFAULT_VISIBILITY_MODELS]);
+    setSelectedModels(["chatgpt", "claude", "gemini", "perplexity"]);
     setSelectedPrompts([]);
     setFocusPromptId(null);
   }, [selectedBrandId]);
@@ -143,7 +143,7 @@ export default function LLMVisibilityPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brandId: selectedBrandId,
-          models: selectedModels.length > 0 ? selectedModels : [...DEFAULT_VISIBILITY_MODELS],
+          models: selectedModels.length > 0 ? selectedModels : ["chatgpt", "claude", "gemini", "perplexity"],
         }),
       });
       const json = (await res.json()) as {

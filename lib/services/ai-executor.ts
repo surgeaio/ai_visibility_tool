@@ -1,16 +1,17 @@
-import { callMultipleModels } from "@/lib/ai/call-model";
-import { DEFAULT_VISIBILITY_MODELS, VISIBILITY_MODELS } from "@/lib/ai/models";
-import { isOpenRouterKey } from "@/lib/ai/openrouter-client";
-import { UserApiKeysRepository } from "@/lib/repositories/user-api-keys.repo";
+/**
+ * Visibility pipeline executor.
+ *
+ * Uses official LLM provider SDKs directly (never OpenRouter).
+ * Each provider needs its own API key in Vercel env vars:
+ *   OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, PERPLEXITY_API_KEY
+ */
+import {
+  callMultiplePlatforms,
+  getAvailablePlatforms,
+  type LLMPlatform,
+} from "@/lib/ai/llm-providers";
 
-export type AIModelName =
-  | "chatgpt"
-  | "claude"
-  | "gemini"
-  | "perplexity"
-  | "llama"
-  | "deepseek"
-  | "mistral";
+export type AIModelName = "chatgpt" | "claude" | "gemini" | "perplexity";
 
 export interface AIModelResponse {
   model: AIModelName;
@@ -21,112 +22,73 @@ export interface AIModelResponse {
   status: "success" | "failed";
 }
 
-const SYSTEM_PROMPT =
-  "You are a helpful assistant. When asked about products or services, list specific brand names with brief descriptions.";
-
 /**
- * Resolve the best available OpenRouter API key.
+ * Run a single prompt on one or more AI platforms via official SDKs.
  *
- * Priority:
- *  1. OPENROUTER_API_KEY env var (admin/shared key)
- *  2. Per-user stored key that looks like an OpenRouter key
- *
- * Returns undefined when no key is found anywhere.
- */
-async function resolveOpenRouterKey(userId?: string): Promise<string | undefined> {
-  const envKey = process.env.OPENROUTER_API_KEY?.trim();
-  if (envKey) return envKey;
-
-  if (!userId?.trim()) return undefined;
-
-  try {
-    const userKeys = await new UserApiKeysRepository().listActiveLlmKeysDecrypted(userId);
-    const orKey = userKeys.find((k) => isOpenRouterKey(k.apiKey));
-    if (orKey) return orKey.apiKey;
-  } catch (err) {
-    console.error(
-      "[ai-executor] Failed to load user API keys:",
-      err instanceof Error ? err.message : err,
-    );
-  }
-
-  return undefined;
-}
-
-/**
- * Run a single prompt on one or more AI models via the OpenRouter gateway.
- *
- * Each model runs in parallel; a failure on one never blocks the others.
- * The return shape is identical to the legacy provider-class path so all
- * downstream callers (visibility-orchestrator, persist, etc.) remain unchanged.
+ * Platforms with missing API keys are skipped with a clear error message.
+ * Never throws — failures are captured per-result.
  */
 export async function runPromptOnAllModels(
   prompt: string,
-  models: AIModelName[] = [...DEFAULT_VISIBILITY_MODELS] as AIModelName[],
-  userId?: string,
+  models: AIModelName[] = ["chatgpt", "claude", "gemini", "perplexity"],
+  _userId?: string,
 ): Promise<AIModelResponse[]> {
-  const apiKey = await resolveOpenRouterKey(userId);
+  const platforms = models as LLMPlatform[];
+  const available = getAvailablePlatforms(platforms);
+  const missing = platforms.filter((p) => !available.includes(p));
 
-  if (!apiKey) {
-    console.error("[ai-executor] No OPENROUTER_API_KEY found in env or user settings");
+  if (missing.length) {
+    console.warn(
+      `[ai-executor] Missing API keys for: ${missing.join(", ")} — these platforms will be skipped`,
+    );
+  }
+
+  if (!available.length) {
+    console.error("[ai-executor] No API keys configured for any platform");
     return models.map((model) => ({
       model,
       responseText: "",
       sources: [],
       error:
-        "OPENROUTER_API_KEY not configured. Add it in Vercel → Settings → Environment Variables.",
+        "No LLM API keys configured. Add OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, or PERPLEXITY_API_KEY in Vercel → Settings → Environment Variables.",
       status: "failed" as const,
     }));
   }
 
-  // Only run models that have a mapping in VISIBILITY_MODELS
-  const runnable = models.filter((m) => Boolean(VISIBILITY_MODELS[m]));
-  const skipped = models.filter((m) => !VISIBILITY_MODELS[m]);
+  console.log(`[ai-executor] Running ${available.length} platform(s): ${available.join(", ")}`);
 
-  if (skipped.length) {
-    console.warn(`[ai-executor] No model mapping for: ${skipped.join(", ")} — skipping`);
-  }
+  const results = await callMultiplePlatforms(available, prompt);
 
-  if (!runnable.length) {
-    return models.map((model) => ({
-      model,
-      responseText: "",
-      sources: [],
-      error: "No OpenRouter model ID configured for this slot",
-      status: "failed" as const,
-    }));
-  }
-
-  console.log(`[ai-executor] Running ${runnable.length} model(s): ${runnable.join(", ")}`);
-
-  const results = await callMultipleModels(runnable, prompt, {
-    maxTokens: 1500,
-    temperature: 0.3,
-    systemPrompt: SYSTEM_PROMPT,
-    apiKey,
-  });
-
-  // Build final array preserving original model order, inserting skipped failures
-  const resultMap = new Map(results.map((r) => [r.modelSlug, r]));
+  // Build response array preserving original model order
+  const resultMap = new Map(results.map((r) => [r.platform, r]));
 
   return models.map((model) => {
-    const r = resultMap.get(model);
+    const r = resultMap.get(model as LLMPlatform);
     if (!r) {
+      // Platform was skipped due to missing key
       return {
         model,
         responseText: "",
         sources: [],
-        error: "No OpenRouter model ID configured for this slot",
+        error: `API key not configured for ${model}. Add the key in Vercel → Settings → Environment Variables.`,
+        status: "failed" as const,
+      };
+    }
+    if (!r.ok) {
+      return {
+        model,
+        responseText: "",
+        sources: [],
+        error: r.error,
         status: "failed" as const,
       };
     }
     return {
       model,
-      responseText: r.responseText,
-      sources: [],
+      responseText: r.text,
+      sources: r.sources,
       tokensUsed: r.tokensUsed,
-      error: r.error,
-      status: r.success ? ("success" as const) : ("failed" as const),
+      status: "success" as const,
     };
   });
 }

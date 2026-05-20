@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import { ChevronDown, Plus } from "lucide-react";
+import { ChevronDown, Plus, Trash2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -92,6 +92,33 @@ export function ClientSelector({ selectedBrandId, onSelect }: ClientSelectorProp
     localStorage.setItem("selectedBrandId", client.id);
   };
 
+  const handleDeleteClient = async (e: React.MouseEvent, id: string, name: string) => {
+    e.stopPropagation();
+    if (!window.confirm(`Delete "${name}"?\n\nThis permanently removes the brand and ALL its prompts, responses, and metrics. This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`/api/brands/${id}`, { method: "DELETE" });
+      if (!res.ok) {
+        const err = (await res.json().catch(() => ({ error: "Delete failed" }))) as { error?: string };
+        alert(err.error ?? "Delete failed");
+        return;
+      }
+      const remaining = clients.filter((c) => c.id !== id);
+      setClients(remaining);
+      if (selectedBrandId === id) {
+        const next = remaining[0] ?? null;
+        if (next) {
+          handleSelect(next);
+        } else {
+          onSelect("");
+          setBrandName("");
+          localStorage.removeItem("selectedBrandId");
+        }
+      }
+    } catch {
+      alert("Network error — could not delete client");
+    }
+  };
+
   if (loading) {
     return <div className="mb-2 h-10 animate-pulse rounded-md bg-[#1a1a1a]" />;
   }
@@ -139,7 +166,7 @@ export function ClientSelector({ selectedBrandId, onSelect }: ClientSelectorProp
         {clients.map((client) => (
           <DropdownMenuItem
             key={client.id}
-            className="cursor-pointer gap-2 text-neutral-200 focus:bg-[#1a1a1a] focus:text-white"
+            className="group cursor-pointer gap-2 text-neutral-200 focus:bg-[#1a1a1a] focus:text-white"
             onClick={() => handleSelect(client)}
           >
             <div
@@ -156,6 +183,14 @@ export function ClientSelector({ selectedBrandId, onSelect }: ClientSelectorProp
             {client.id === selectedBrandId ? (
               <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-emerald-500" />
             ) : null}
+            <button
+              onClick={(e) => void handleDeleteClient(e, client.id, client.name)}
+              className="ml-1 shrink-0 rounded p-0.5 opacity-0 transition-opacity hover:bg-red-500/20 group-hover:opacity-100"
+              title={`Delete ${client.name}`}
+              aria-label={`Delete ${client.name}`}
+            >
+              <Trash2 className="h-3.5 w-3.5 text-red-400" />
+            </button>
           </DropdownMenuItem>
         ))}
         <DropdownMenuSeparator className="bg-[#262626]" />

@@ -6,14 +6,7 @@ const PLATFORM_DISPLAY: Record<string, string> = {
   claude:     "Claude",
   gemini:     "Gemini",
   perplexity: "Perplexity",
-  // Free OpenRouter-only models
-  llama:      "Llama 3.1",
-  deepseek:   "DeepSeek R1",
-  mistral:    "Mistral 7B",
 };
-
-/** Extra model slugs that aren't in LLM_KEY_TO_PLATFORM_SLUG but need platform rows. */
-const EXTRA_MODEL_SLUGS = ["llama", "deepseek", "mistral"] as const;
 
 /** Ensure llm_platforms rows exist (idempotent). */
 export async function ensureLlmPlatformsSeeded(): Promise<void> {
@@ -23,10 +16,7 @@ export async function ensureLlmPlatformsSeeded(): Promise<void> {
     return;
   }
 
-  const slugs = [
-    ...Object.values(LLM_KEY_TO_PLATFORM_SLUG),
-    ...EXTRA_MODEL_SLUGS,
-  ];
+  const slugs = Object.values(LLM_KEY_TO_PLATFORM_SLUG);
 
   for (const name of slugs) {
     const { data: existing } = await admin.from("llm_platforms").select("id").eq("name", name).maybeSingle();

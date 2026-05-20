@@ -9,17 +9,13 @@ import {
 } from "@/lib/services/response-analyzer";
 import type { AIModelName } from "@/lib/services/ai-executor";
 import type { LlmKeyProviderName } from "@/lib/ai/llm-provider-factory";
-import {
-  resolvePlatformIdForProvider,
-  resolvePlatformIdBySlug,
-} from "@/lib/services/llm-platforms-seed";
+import { resolvePlatformIdForProvider } from "@/lib/services/llm-platforms-seed";
 
-const MODEL_TO_PROVIDER: Partial<Record<AIModelName, LlmKeyProviderName>> = {
+const MODEL_TO_PROVIDER: Record<AIModelName, LlmKeyProviderName> = {
   chatgpt:    "openai",
   claude:     "anthropic",
   gemini:     "gemini",
   perplexity: "perplexity",
-  // llama, deepseek, mistral use OpenRouter directly — resolved by slug below
 };
 
 export type ModelSaveStats = {
@@ -160,16 +156,7 @@ async function insertLlmPerformance(
   },
 ): Promise<boolean> {
   try {
-    const provider = MODEL_TO_PROVIDER[params.model];
-    const platformId = provider
-      ? await resolvePlatformIdForProvider(provider)
-      : await resolvePlatformIdBySlug(params.model);
-
-    if (!platformId) {
-      console.warn(`[visibility-persist] no platform row for slug="${params.model}" — skipping llm_brand_performance`);
-      return false;
-    }
-
+    const platformId = await resolvePlatformIdForProvider(MODEL_TO_PROVIDER[params.model]);
     const visibilityScore = visibilityFromAnalysis(
       params.analysis.brandMentioned,
       params.analysis.brandPosition,
