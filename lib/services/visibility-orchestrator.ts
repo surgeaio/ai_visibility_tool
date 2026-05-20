@@ -326,6 +326,7 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
   }
 
   await refreshDailyMetrics(opts.brandId, runDate);
+  console.log(`[visibility-orchestrator] Finished prompt ${opts.promptId} for brand ${opts.brandId}`);
   return { promptId: opts.promptId, results };
 }
 
@@ -387,6 +388,12 @@ export async function runAllPromptsForBrand(
       })
       .eq("id", job.id);
   }
+
+  const today = new Date().toISOString().slice(0, 10);
+  await refreshDailyMetrics(brandId, today);
+  console.log(
+    `[visibility-orchestrator] Run complete brand=${brandId} completed=${completed} failed=${failed}`,
+  );
 
   return { jobId: job?.id ?? null, completed, failed };
 }

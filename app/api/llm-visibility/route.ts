@@ -5,8 +5,9 @@ import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateQuery } from "@/lib/api/validate";
 import { llmVisibilityQuerySchema } from "@/lib/validators";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
+import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { buildLlmVisibilityDashboard } from "@/lib/services/llm-visibility-dashboard";
+import { loadVisibilityPerfRows } from "@/lib/services/llm-visibility-data";
 import { ensureLlmPlatformsSeeded } from "@/lib/services/llm-platforms-seed";
 
 function parseCsv(value: string | undefined): string[] {
@@ -30,6 +31,8 @@ export async function GET(req: Request) {
   }
 
   try {
+    console.log(`[llm-visibility] GET brandId=${brandId} range=${range}`);
+
     const userClient = await createServerSupabaseClient();
     const { data: userBrands, error: brandsErr } = await userClient
       .from("brands")
@@ -58,61 +61,50 @@ export async function GET(req: Request) {
         : [brandId];
     if (!selectedBrandIds.length) selectedBrandIds.push(brandId);
 
-    const admin = tryCreateAdminSupabaseClient();
-    const db = admin ?? userClient;
-    await ensureLlmPlatformsSeeded();
+    const db = createAdminSupabaseClient();
+
+    try {
+      await ensureLlmPlatformsSeeded();
+    } catch (seedErr) {
+      console.warn("[llm-visibility] platform seed skipped:", seedErr);
+    }
 
     const days =
       range === "90d" ? 90 : range === "30d" ? 30 : range === "14d" ? 14 : 7;
     const from = new Date(Date.now() - days * 86400_000).toISOString();
     const fromDate = from.slice(0, 10);
 
-    const { data: perfRows, error: perfError } = await db
-      .from("llm_brand_performance")
-      .select(
-        "brand_id, platform_id, prompt_id, visibility_score, rank_position, measured_at",
-      )
-      .in("brand_id", selectedBrandIds)
-      .gte("measured_at", from)
-      .order("measured_at", { ascending: true });
+    const perfRowsForDashboard = await loadVisibilityPerfRows(
+      db,
+      selectedBrandIds,
+      from,
+      fromDate,
+    );
 
-    if (perfError) {
-      return serverErrorResponse(perfError.message, requestId);
+    const { data: platRows, error: platError } = await db
+      .from("llm_platforms")
+      .select("id, name, display_name");
+
+    if (platError) {
+      console.error("[llm-visibility] llm_platforms error:", platError.message);
     }
 
-    let perfRowsForDashboard = perfRows ?? [];
-    if (!perfRowsForDashboard.length) {
-      const { data: dailyMetrics } = await db
-        .from("brand_daily_metrics")
-        .select("brand_id, metric_date, visibility_pct, avg_position, ai_model")
-        .eq("brand_id", brandId)
-        .eq("ai_model", "all")
-        .gte("metric_date", fromDate)
-        .order("metric_date", { ascending: true });
-
-      perfRowsForDashboard = (dailyMetrics ?? []).map((row) => ({
-        brand_id: row.brand_id as string,
-        platform_id: null,
-        prompt_id: null,
-        visibility_score: row.visibility_pct != null ? Number(row.visibility_pct) : null,
-        rank_position: row.avg_position != null ? Number(row.avg_position) : null,
-        measured_at: `${row.metric_date as string}T12:00:00.000Z`,
-      }));
-    }
-
-    const { data: platRows } = await db.from("llm_platforms").select("id, name, display_name");
     const platforms = (platRows ?? []) as Array<{
       id: string;
       name: string;
       display_name: string;
     }>;
 
-    const { data: promptRows } = await db
+    const { data: promptRows, error: promptError } = await db
       .from("prompts")
       .select("id, text")
       .eq("brand_id", brandId)
       .eq("is_active", true)
       .order("created_at", { ascending: false });
+
+    if (promptError) {
+      console.error("[llm-visibility] prompts error:", promptError.message);
+    }
 
     const prompts = (promptRows ?? []).map((p) => ({
       id: p.id as string,
@@ -131,9 +123,28 @@ export async function GET(req: Request) {
       focusPromptId: focusPromptId ?? null,
     });
 
+    console.log(
+      `[llm-visibility] response empty=${payload.empty} chartPoints=${payload.chartData.length}`,
+    );
+
     return Response.json({ ...payload, requestId });
   } catch (e) {
-    console.error(e);
-    return serverErrorResponse("Failed to load LLM visibility", requestId);
+    console.error("[llm-visibility] unhandled error:", e);
+    return Response.json(
+      {
+        error: e instanceof Error ? e.message : "Failed to load LLM visibility",
+        empty: true,
+        chartData: [],
+        brands: [],
+        availableBrands: [],
+        availableModels: [],
+        byDate: [],
+        byModel: {},
+        prompts: [],
+        promptPerformance: null,
+        requestId,
+      },
+      { status: 500 },
+    );
   }
 }

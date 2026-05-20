@@ -4,6 +4,7 @@ import type {
   LlmVisibilityDashboardResponse,
   LlmVisibilityPromptOption,
 } from "@/lib/types/llm-visibility-dashboard";
+import { modelLabelFromSlug } from "@/lib/services/llm-visibility-data";
 
 type PerfRow = {
   brand_id: string;
@@ -12,6 +13,7 @@ type PerfRow = {
   visibility_score: number | null;
   rank_position: number | null;
   measured_at: string | null;
+  ai_model_slug?: string | null;
 };
 
 type PlatformRow = { id: string; name: string; display_name: string };
@@ -71,9 +73,13 @@ export function buildLlmVisibilityDashboard(params: {
     if (new Date(r.measured_at).getTime() < fromMs) return false;
     if (!params.selectedBrandIds.includes(r.brand_id)) return false;
     if (promptIdSet && r.prompt_id && !promptIdSet.has(r.prompt_id)) return false;
-    if (modelSlugSet && r.platform_id) {
-      const slug = platById.get(r.platform_id)?.name;
-      if (!slug || !modelSlugSet.has(slug)) return false;
+    if (modelSlugSet) {
+      if (r.platform_id) {
+        const slug = platById.get(r.platform_id)?.name;
+        if (!slug || !modelSlugSet.has(slug)) return false;
+      } else if (r.ai_model_slug && r.ai_model_slug !== "all") {
+        if (!modelSlugSet.has(r.ai_model_slug)) return false;
+      }
     }
     return true;
   });
@@ -113,7 +119,12 @@ export function buildLlmVisibilityDashboard(params: {
     const bKey = llmVisibilityBrandKey(brand.name);
     const day = r.measured_at!.slice(0, 10);
     const plat = r.platform_id ? platById.get(r.platform_id) : null;
-    const modelLabel = plat?.display_name ?? plat?.name ?? "Unknown";
+    const modelLabel =
+      plat?.display_name ??
+      plat?.name ??
+      (r.ai_model_slug && r.ai_model_slug !== "all"
+        ? modelLabelFromSlug(r.ai_model_slug)
+        : "Unknown");
 
     if (r.visibility_score != null) {
       const visMap = dayBrandVis.get(day) ?? new Map();
@@ -143,7 +154,7 @@ export function buildLlmVisibilityDashboard(params: {
       modelBrandRank.set(modelLabel, mRank);
     }
 
-    if (focusPromptId && r.prompt_id === focusPromptId && plat) {
+    if (focusPromptId && r.prompt_id === focusPromptId) {
       if (r.visibility_score != null) {
         const pVis = dayPromptVis.get(day) ?? new Map();
         const pl = pVis.get(modelLabel) ?? [];

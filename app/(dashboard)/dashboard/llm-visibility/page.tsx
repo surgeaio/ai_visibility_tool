@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { RunPromptsModal } from "./_components/RunPromptsModal";
@@ -41,6 +41,7 @@ export default function LLMVisibilityPage() {
   const [runningAll, setRunningAll] = useState(false);
   const [reanalyzing, setReanalyzing] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const fetchGenerationRef = useRef(0);
 
   const fetchAllData = useCallback(async () => {
     if (!selectedBrandId) {
@@ -49,6 +50,7 @@ export default function LLMVisibilityPage() {
       return;
     }
 
+    const generation = ++fetchGenerationRef.current;
     setLoading(true);
     setError(null);
     const controller = new AbortController();
@@ -81,8 +83,16 @@ export default function LLMVisibilityPage() {
         throw new Error(json.error ?? "Failed to load LLM visibility");
       }
 
+      if (generation !== fetchGenerationRef.current) return;
+
+      console.log("[LLM Visibility] Data received:", {
+        empty: json.empty,
+        chartPoints: json.chartData?.length ?? 0,
+        byDate: json.byDate?.length ?? 0,
+      });
       setData(json);
     } catch (err) {
+      if (generation !== fetchGenerationRef.current) return;
       console.error("Failed to fetch LLM visibility data:", err);
       const message =
         err instanceof Error && err.name === "AbortError"
@@ -94,7 +104,9 @@ export default function LLMVisibilityPage() {
       setData(EMPTY_DASHBOARD);
     } finally {
       clearTimeout(timeoutId);
-      setLoading(false);
+      if (generation === fetchGenerationRef.current) {
+        setLoading(false);
+      }
     }
   }, [
     selectedBrandId,
@@ -116,6 +128,21 @@ export default function LLMVisibilityPage() {
   useEffect(() => {
     void fetchAllData();
   }, [fetchAllData, refreshKey]);
+
+  useEffect(() => {
+    if (!loading) return;
+    const forceStop = setTimeout(() => {
+      console.warn("[LLM Visibility] Force stopping loading after 20s");
+      setLoading(false);
+    }, 20000);
+    return () => clearTimeout(forceStop);
+  }, [loading]);
+
+  function scheduleDataRefresh() {
+    setRefreshKey((k) => k + 1);
+    setTimeout(() => setRefreshKey((k) => k + 1), 3000);
+    setTimeout(() => setRefreshKey((k) => k + 1), 6000);
+  }
 
   async function handleRunPromptsNow() {
     if (!selectedBrandId || runningAll) return;
@@ -141,7 +168,7 @@ export default function LLMVisibilityPage() {
         toast.success(json.message ?? "Prompts queued. Results in 2–3 minutes.");
       } else {
         toast.success(`Completed ${json.completed ?? 0} prompts (${json.failed ?? 0} failed).`);
-        setTimeout(() => setRefreshKey((k) => k + 1), 2000);
+        scheduleDataRefresh();
       }
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to run prompts");
@@ -309,7 +336,7 @@ export default function LLMVisibilityPage() {
       <RunPromptsModal
         open={runModalOpen}
         onClose={() => setRunModalOpen(false)}
-        onSuccess={() => setRefreshKey((k) => k + 1)}
+        onSuccess={scheduleDataRefresh}
       />
     </div>
   );
