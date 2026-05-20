@@ -31,6 +31,7 @@ export interface AIModelResponse {
 export async function runPromptOnAllModels(
   prompt: string,
   models: AIModelName[] = ["chatgpt", "claude", "gemini", "perplexity"],
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _userId?: string,
 ): Promise<AIModelResponse[]> {
   const platforms = models as LLMPlatform[];
