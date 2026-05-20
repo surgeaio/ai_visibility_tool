@@ -4,9 +4,7 @@ import { z } from "zod";
 import { adminHasLlmProviders } from "@/lib/ai/admin-providers";
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateBody } from "@/lib/api/validate";
-import { getPromptExecutionQueue } from "@/lib/queues/prompt-execution.queue";
 import { PromptsRepository } from "@/lib/repositories";
-import { isRedisAvailable } from "@/lib/redis/client";
 import { executePromptExecutionJob } from "@/lib/services/llm-tracker";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validators/common.schema";
@@ -73,24 +71,6 @@ export async function POST(req: Request) {
         brandId: created.brandId,
         requestId,
       };
-
-      if (isRedisAvailable()) {
-        try {
-          const queue = getPromptExecutionQueue();
-          if (queue) {
-            await queue.add("run", jobPayload, {
-              attempts: 3,
-              backoff: { type: "exponential", delay: 1000 },
-              removeOnComplete: 1000,
-              removeOnFail: 5000,
-            });
-            results.push({ promptText: text, promptId: created.id, status: "queued" });
-            continue;
-          }
-        } catch (err) {
-          console.warn("[batch-run] queue failed, falling back to sync:", (err as Error).message);
-        }
-      }
 
       await executePromptExecutionJob(jobPayload);
       results.push({ promptText: text, promptId: created.id, status: "completed" });

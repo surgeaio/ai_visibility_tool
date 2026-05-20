@@ -1,12 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/cron/gsc-sync",
-      "schedule": "0 6 * * *"
+      "path": "/api/cron/run-daily-prompts",
+      "schedule": "0 3 * * *"
     },
     {
-      "path": "/api/cron/competitor-refresh",
-      "schedule": "0 7 * * *"
+      "path": "/api/cron/sync-gsc-daily",
+      "schedule": "0 6 * * *"
     }
   ]
 }

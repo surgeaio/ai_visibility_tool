@@ -5,9 +5,7 @@ import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateParams } from "@/lib/api/validate";
 import { adminHasLlmProviders } from "@/lib/ai/admin-providers";
 import { promptIdParamSchema } from "@/lib/validators";
-import { getPromptExecutionQueue } from "@/lib/queues";
 import { rateLimit } from "@/lib/rate-limit";
-import { isRedisAvailable } from "@/lib/redis/client";
 import { PromptsRepository } from "@/lib/repositories";
 import { executePromptExecutionJob } from "@/lib/services/llm-tracker";
 
@@ -52,28 +50,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
 
     const brandId = prompt.brandId;
     const jobPayload = { promptId, userId, brandId, requestId };
-
-    if (isRedisAvailable()) {
-      try {
-        const queue = getPromptExecutionQueue();
-        if (queue) {
-          const job = await queue.add("run", jobPayload, {
-            attempts: 3,
-            backoff: { type: "exponential", delay: 1000 },
-            removeOnComplete: 1000,
-            removeOnFail: 5000,
-          });
-          return Response.json({
-            jobId: String(job.id),
-            status: "queued" as const,
-            mode: "async" as const,
-            requestId,
-          });
-        }
-      } catch (err) {
-        console.warn("[prompt-run] queue failed, falling back to sync:", (err as Error).message);
-      }
-    }
 
     try {
       const { results, errors } = await executePromptExecutionJob(jobPayload);

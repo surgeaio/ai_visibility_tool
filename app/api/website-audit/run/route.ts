@@ -3,8 +3,6 @@ export const dynamic = "force-dynamic";
 import { z } from "zod";
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateBody } from "@/lib/api/validate";
-import { getWebsiteCrawlQueue } from "@/lib/queues/website-crawl.queue";
-import { isRedisAvailable } from "@/lib/redis/client";
 import { BrandsRepository } from "@/lib/repositories";
 import { normalizeSiteUrl, runWebsiteAuditSync } from "@/lib/services/website-audit-runner";
 
@@ -51,24 +49,6 @@ export async function POST(req: Request) {
     }
 
     const { brandId, maxPages } = parsed.data;
-    const jobData = { brandId, siteUrl, maxPages };
-
-    if (isRedisAvailable()) {
-      try {
-        const queue = getWebsiteCrawlQueue();
-        if (queue) {
-          const job = await queue.add("crawl", jobData, { attempts: 1, removeOnComplete: 200 });
-          return Response.json({
-            jobId: String(job.id),
-            status: "queued",
-            mode: "async",
-            requestId,
-          });
-        }
-      } catch (err) {
-        console.warn("[website-audit] queue failed, falling back to sync:", (err as Error).message);
-      }
-    }
 
     const result = await runWebsiteAuditSync({ brandId, siteUrl, maxPages });
     return Response.json({

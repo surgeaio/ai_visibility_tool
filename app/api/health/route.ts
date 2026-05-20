@@ -2,7 +2,6 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { adminHasLlmProviders } from "@/lib/ai/admin-providers";
-import { isRedisAvailable, pingRedis } from "@/lib/redis/client";
 
 function checkEnv(): boolean {
   return Boolean(
@@ -30,8 +29,6 @@ async function checkSupabase(): Promise<boolean> {
 export async function GET() {
   const envOk = checkEnv();
   const supabaseOk = await checkSupabase();
-  const redisConfigured = isRedisAvailable();
-  const redisConnected = redisConfigured ? await pingRedis() : false;
 
   const providers = {
     openai: Boolean(process.env.OPENAI_API_KEY?.trim()),
@@ -42,25 +39,21 @@ export async function GET() {
   };
 
   const canRunPrompts = adminHasLlmProviders();
-  const executionMode = redisConfigured && redisConnected ? "async" : "sync";
+  const executionMode = "sync";
 
   const checks = {
     env: envOk,
     supabase: supabaseOk,
-    redis: redisConnected,
-    redis_configured: redisConfigured,
     execution_mode: executionMode,
     providers,
     can_run_prompts: canRunPrompts,
   };
 
-  const status =
-    envOk && supabaseOk && canRunPrompts ? (redisConnected ? "ok" : "degraded") : "degraded";
+  const status = envOk && supabaseOk && canRunPrompts ? "ok" : "degraded";
 
   return NextResponse.json({
     status,
     checks,
     timestamp: new Date().toISOString(),
-    redisConfigured,
   });
 }

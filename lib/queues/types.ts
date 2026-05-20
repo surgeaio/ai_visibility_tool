@@ -1,6 +1,4 @@
-import type { BULL_QUEUE_NAMES } from "@/lib/queues/queue-names";
-
-export type BullQueueName = (typeof BULL_QUEUE_NAMES)[number];
+export type BullQueueName = string;
 
 export interface PromptExecutionJobData {
   promptId: string;

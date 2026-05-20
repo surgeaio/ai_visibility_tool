@@ -165,7 +165,9 @@ export async function handleGoogleGscOAuthCallback(req: NextRequest): Promise<Ne
           { brandId, userId: user.id, connectionId: connRow.id, daysBack: 28 },
           { attempts: 2, removeOnComplete: 500 },
         )
-        .catch((err) => console.error("[gsc-oauth-callback] queue sync failed:", err));
+        .catch((err: unknown) =>
+          console.error("[gsc-oauth-callback] queue sync failed:", err),
+        );
     } else if (!queue) {
       console.warn("[gsc-oauth-callback] Redis queue unavailable — run sync manually from dashboard");
     }
