@@ -9,9 +9,11 @@ import { runPromptOnAllModels, type AIModelName } from "@/lib/services/ai-execut
 import { analyzeResponse, analyzeResponseLocal } from "@/lib/services/response-analyzer";
 import {
   ensureVisibilityTables,
+  normalizeSentiment,
   persistFailedModelResponse,
   persistSuccessfulModelResponse,
   syncPerformanceFromAnalysis,
+  toNullableInt,
   type ModelSaveStats,
 } from "@/lib/services/visibility-persist";
 
@@ -182,12 +184,13 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
     responsesSaved: 0,
     analysesSaved: 0,
     perfSaved: 0,
-    failed: 0,
+    llmFailed: 0,
+    analysisFailed: 0,
   };
 
   for (const resp of responses) {
-    if (resp.status === "failed" || !resp.responseText) {
-      saveStats.failed += 1;
+    if (resp.status === "failed" || !resp.responseText?.trim()) {
+      saveStats.llmFailed += 1;
       await persistFailedModelResponse(supabase, {
         brandId: opts.brandId,
         promptId: opts.promptId,
@@ -220,7 +223,7 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
       saveStats.perfSaved += persisted.stats.perfSaved;
     }
     if (!persisted.analysisSaved) {
-      saveStats.failed += 1;
+      saveStats.analysisFailed += 1;
       if (persisted.responseSaved) {
         console.error(
           `[visibility-orchestrator] chat_analysis not saved model=${resp.model} prompt=${opts.promptId}`,
@@ -236,10 +239,14 @@ export async function runSinglePrompt(opts: RunPromptOptions) {
   }
 
   await refreshDailyMetrics(opts.brandId, runDate);
+  const modelErrors = responses
+    .filter((r) => r.status === "failed" && r.error)
+    .map((r) => ({ model: r.model, error: r.error as string }));
+
   console.log(
     `[visibility-orchestrator] Finished prompt ${opts.promptId} saves=${JSON.stringify(saveStats)}`,
   );
-  return { promptId: opts.promptId, results, saveStats };
+  return { promptId: opts.promptId, results, saveStats, modelErrors };
 }
 
 export async function runAllPromptsForBrand(
@@ -279,8 +286,10 @@ export async function runAllPromptsForBrand(
     responsesSaved: 0,
     analysesSaved: 0,
     perfSaved: 0,
-    failed: 0,
+    llmFailed: 0,
+    analysisFailed: 0,
   };
+  const modelErrorMap = new Map<string, string>();
 
   for (const p of prompts) {
     try {
@@ -294,7 +303,11 @@ export async function runAllPromptsForBrand(
         totals.responsesSaved += run.saveStats.responsesSaved;
         totals.analysesSaved += run.saveStats.analysesSaved;
         totals.perfSaved += run.saveStats.perfSaved;
-        totals.failed += run.saveStats.failed;
+        totals.llmFailed += run.saveStats.llmFailed;
+        totals.analysisFailed += run.saveStats.analysisFailed;
+      }
+      for (const me of run.modelErrors ?? []) {
+        modelErrorMap.set(me.model, me.error);
       }
       completed += 1;
     } catch (err) {
@@ -339,7 +352,9 @@ export async function runAllPromptsForBrand(
     `[visibility-orchestrator] Run complete brand=${brandId} completed=${completed} failed=${failed} saves=${JSON.stringify(totals)}`,
   );
 
-  return { jobId: job?.id ?? null, completed, failed, saveStats: totals };
+  const modelErrors = [...modelErrorMap.entries()].map(([model, error]) => ({ model, error }));
+
+  return { jobId: job?.id ?? null, completed, failed, saveStats: totals, modelErrors };
 }
 
 /** Re-run brand detection on saved chat_responses without calling LLMs again. */
@@ -401,26 +416,10 @@ export async function reanalyzeBrandResponses(brandId: string) {
 
     await supabase.from("chat_analysis").delete().eq("chat_response_id", row.id);
 
-    const sentiment = {
-      score: analysis.brandSentiment,
-      label: analysis.brandSentimentLabel,
-    };
-    const clamped =
-      sentiment.score != null
-        ? Math.max(0, Math.min(100, Math.round(sentiment.score)))
-        : null;
-    const label =
-      sentiment.label === "positive" ||
-      sentiment.label === "neutral" ||
-      sentiment.label === "negative"
-        ? sentiment.label
-        : clamped != null
-          ? clamped >= 60
-            ? "positive"
-            : clamped <= 40
-              ? "negative"
-              : "neutral"
-          : null;
+    const sentiment = normalizeSentiment(
+      analysis.brandSentiment,
+      analysis.brandSentimentLabel,
+    );
 
     const { error: insertErr } = await supabase.from("chat_analysis").insert({
       chat_response_id: row.id,
@@ -429,9 +428,9 @@ export async function reanalyzeBrandResponses(brandId: string) {
       ai_model: row.ai_model as string,
       run_date: runDate,
       brand_mentioned: analysis.brandMentioned,
-      brand_position: analysis.brandPosition,
-      brand_sentiment: clamped,
-      brand_sentiment_label: label,
+      brand_position: toNullableInt(analysis.brandPosition),
+      brand_sentiment: sentiment.score,
+      brand_sentiment_label: sentiment.label,
       brand_mention_context: analysis.brandMentionContext,
       all_brands_mentioned: analysis.allBrandsMentioned,
       sources_used: analysis.domainsReferenced.map((d) => ({ domain: d })),

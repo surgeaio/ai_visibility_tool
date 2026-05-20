@@ -22,7 +22,10 @@ export type ModelSaveStats = {
   responsesSaved: number;
   analysesSaved: number;
   perfSaved: number;
-  failed: number;
+  /** LLM call or chat_responses insert failed — no successful response row. */
+  llmFailed: number;
+  /** Response saved but chat_analysis (or perf) insert failed. */
+  analysisFailed: number;
 };
 
 function logDbError(label: string, error: { message: string; code?: string; details?: string }) {
@@ -31,11 +34,16 @@ function logDbError(label: string, error: { message: string; code?: string; deta
 
 const SENTIMENT_LABELS = new Set(["positive", "neutral", "negative"]);
 
-function normalizeSentiment(
+export function toNullableInt(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null;
+  return Math.round(value);
+}
+
+export function normalizeSentiment(
   score: number | null,
   label: string | null,
 ): { score: number | null; label: "positive" | "neutral" | "negative" | null } {
-  if (score == null) return { score: null, label: null };
+  if (score == null || !Number.isFinite(score)) return { score: null, label: null };
   const clamped = Math.max(0, Math.min(100, Math.round(score)));
   const normalizedLabel =
     label && SENTIMENT_LABELS.has(label) ? (label as "positive" | "neutral" | "negative") : null;
@@ -109,7 +117,7 @@ async function insertChatAnalysis(
     ai_model: params.aiModel,
     run_date: params.runDate,
     brand_mentioned: params.analysis.brandMentioned,
-    brand_position: params.analysis.brandPosition,
+    brand_position: toNullableInt(params.analysis.brandPosition),
     brand_sentiment: sentiment.score,
     brand_sentiment_label: sentiment.label,
     brand_mention_context: params.analysis.brandMentionContext,

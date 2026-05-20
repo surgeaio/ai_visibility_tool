@@ -1,5 +1,11 @@
 import OpenAI from "openai";
 import { assertLlmKeyOrAllowDemo } from "@/lib/ai/llm-execution-policy";
+import {
+  createOpenRouterClient,
+  hasOpenRouter,
+  isOpenRouterKey,
+} from "@/lib/ai/openrouter-client";
+import { AI_MODELS, resolveOpenRouterModel } from "@/lib/ai/models";
 import { AIProvider } from "@/lib/ai/providers/base.provider";
 import type { AIExecuteOptions, AIResponse } from "@/lib/ai/types";
 
@@ -10,29 +16,37 @@ export class OpenAIProvider extends AIProvider {
 
   async execute(prompt: string, options: AIExecuteOptions): Promise<AIResponse> {
     const started = Date.now();
-    const model = options.model ?? this.defaultModel;
-    const key = options.apiKey?.trim() || process.env.OPENAI_API_KEY;
-    assertLlmKeyOrAllowDemo(this.name, key);
+    const overrideKey = options.apiKey?.trim();
+    const useOpenRouter =
+      isOpenRouterKey(overrideKey) || (!overrideKey && hasOpenRouter());
 
-    if (!key) {
-      return {
-        provider: this.name,
-        model,
-        rawResponse: `Demo OpenAI response for prompt: ${prompt.slice(0, 120)}`,
-        citations: [],
-        tokensUsed: { input: 0, output: 0 },
-        cost: 0,
-        latency: Date.now() - started,
-        timestamp: new Date(),
-        requestId: options.requestId,
-      };
+    const directKey = useOpenRouter ? undefined : overrideKey || process.env.OPENAI_API_KEY;
+    const effectiveKey = useOpenRouter
+      ? overrideKey || process.env.OPENROUTER_API_KEY
+      : directKey;
+
+    assertLlmKeyOrAllowDemo(this.name, effectiveKey);
+
+    const model = useOpenRouter
+      ? resolveOpenRouterModel("openai", options.model)
+      : options.model ?? this.defaultModel;
+
+    if (!effectiveKey) {
+      return this.demoResponse(prompt, model, options, started);
     }
 
-    const client = new OpenAI({ apiKey: key, timeout: options.timeoutMs ?? 30_000 });
+    const client = useOpenRouter
+      ? createOpenRouterClient(overrideKey, options.timeoutMs ?? 30_000)
+      : new OpenAI({ apiKey: effectiveKey, timeout: options.timeoutMs ?? 30_000 });
+
+    if (!client) return this.demoResponse(prompt, model, options, started);
+
     const response = await client.chat.completions.create({
       model,
       messages: [
-        ...(options.systemPrompt ? [{ role: "system" as const, content: options.systemPrompt }] : []),
+        ...(options.systemPrompt
+          ? [{ role: "system" as const, content: options.systemPrompt }]
+          : []),
         { role: "user", content: prompt },
       ],
       temperature: options.temperature ?? 0.2,
@@ -55,12 +69,14 @@ export class OpenAIProvider extends AIProvider {
   }
 
   async healthCheck(): Promise<boolean> {
-    return Boolean(process.env.OPENAI_API_KEY?.trim());
+    return Boolean(
+      process.env.OPENROUTER_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim(),
+    );
   }
 
   estimateCost(inputTokens: number, outputTokens: number, model?: string): number {
-    const m = model ?? this.defaultModel;
-    if (m.includes("gpt-4o-mini")) {
+    const m = (model ?? this.defaultModel).toLowerCase();
+    if (m.includes("gpt-4o-mini") || m.includes("4o-mini")) {
       const inputCost = (inputTokens / 1_000_000) * 0.15;
       const outputCost = (outputTokens / 1_000_000) * 0.6;
       return Number((inputCost + outputCost).toFixed(6));
@@ -68,5 +84,24 @@ export class OpenAIProvider extends AIProvider {
     const inputCost = (inputTokens / 1_000_000) * 5;
     const outputCost = (outputTokens / 1_000_000) * 15;
     return Number((inputCost + outputCost).toFixed(6));
+  }
+
+  private demoResponse(
+    prompt: string,
+    model: string,
+    options: AIExecuteOptions,
+    started: number,
+  ): AIResponse {
+    return {
+      provider: this.name,
+      model: model || AI_MODELS.openai,
+      rawResponse: `Demo OpenAI response for prompt: ${prompt.slice(0, 120)}`,
+      citations: [],
+      tokensUsed: { input: 0, output: 0 },
+      cost: 0,
+      latency: Date.now() - started,
+      timestamp: new Date(),
+      requestId: options.requestId,
+    };
   }
 }

@@ -1,5 +1,10 @@
 import Anthropic from "@anthropic-ai/sdk";
 import {
+  createOpenRouterClient,
+  hasOpenRouter,
+} from "@/lib/ai/openrouter-client";
+import { AI_MODELS } from "@/lib/ai/models";
+import {
   buildBrandNameVariations,
   calculateBrandSentiment,
   candidateMatchesOwnBrand,
@@ -97,17 +102,19 @@ export function analyzeResponseLocal(input: AnalyzerInput): AnalyzerOutput {
 export async function analyzeResponse(input: AnalyzerInput): Promise<AnalyzerOutput> {
   const local = analyzeResponseLocal(input);
   const nameVariations = buildBrandNameVariations(input.ownBrand);
-  const apiKey = process.env.ANTHROPIC_API_KEY?.trim();
+  const useOpenRouter = hasOpenRouter();
+  const directKey = process.env.ANTHROPIC_API_KEY?.trim();
 
-  if (!apiKey) {
-    console.warn("[response-analyzer] ANTHROPIC_API_KEY missing — using local brand detection");
+  if (!useOpenRouter && !directKey) {
+    console.warn(
+      "[response-analyzer] No OPENROUTER_API_KEY or ANTHROPIC_API_KEY — using local brand detection",
+    );
     console.log(
       `[response-analyzer] Brand: ${input.ownBrand.name} | Mentioned: ${local.brandMentioned} | Position: ${local.brandPosition}`,
     );
     return local;
   }
 
-  const anthropic = new Anthropic({ apiKey });
   const allBrandNames = [
     ...new Set([
       input.ownBrand.name,
@@ -149,20 +156,35 @@ If no candidate brands appear, return: { "brands_in_order": [] }`;
 
   let rawText = "";
   try {
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 2000,
-      system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-
-    rawText = message.content
-      .filter((b) => b.type === "text")
-      .map((b) => ("text" in b ? b.text : ""))
-      .join("\n")
-      .trim();
+    if (useOpenRouter) {
+      const client = createOpenRouterClient(null, 30_000);
+      if (!client) throw new Error("OpenRouter client unavailable");
+      const completion = await client.chat.completions.create({
+        model: AI_MODELS.claude,
+        max_tokens: 2000,
+        temperature: 0.1,
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: userPrompt },
+        ],
+      });
+      rawText = (completion.choices[0]?.message?.content ?? "").trim();
+    } else {
+      const anthropic = new Anthropic({ apiKey: directKey! });
+      const message = await anthropic.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 2000,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userPrompt }],
+      });
+      rawText = message.content
+        .filter((b) => b.type === "text")
+        .map((b) => ("text" in b ? b.text : ""))
+        .join("\n")
+        .trim();
+    }
   } catch (err) {
-    console.error("[response-analyzer] Anthropic analysis failed, using local detection:", err);
+    console.error("[response-analyzer] analyzer call failed, using local detection:", err);
     return { ...local, rawAnalyzerOutput: "" };
   }
 

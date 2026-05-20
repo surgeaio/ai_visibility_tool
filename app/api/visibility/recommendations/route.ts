@@ -75,12 +75,14 @@ export async function POST(req: Request) {
       return Response.json({ error: "Brand not found", requestId }, { status: 404 });
     }
 
-    const anthropicKey = process.env.ANTHROPIC_API_KEY?.trim();
-    if (!anthropicKey) {
+    const hasKey = Boolean(
+      process.env.OPENROUTER_API_KEY?.trim() || process.env.ANTHROPIC_API_KEY?.trim(),
+    );
+    if (!hasKey) {
       return Response.json(
         {
           error:
-            "ANTHROPIC_API_KEY is not configured. Add it in Vercel → Settings → Environment Variables, then redeploy.",
+            "OPENROUTER_API_KEY (or legacy ANTHROPIC_API_KEY) is not configured. Add it in Vercel → Settings → Environment Variables, then redeploy.",
           requestId,
         },
         { status: 503 },

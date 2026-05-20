@@ -66,28 +66,39 @@ export async function POST(req: Request) {
     console.log(`[/api/visibility/run] Starting prompts for brand: ${brand.name}`);
 
     const result = await runAllPromptsForBrand(brandId, "manual", userId);
-    const allFailed = (result.completed ?? 0) === 0 && (result.failed ?? 0) > 0;
     const analysesSaved = result.saveStats?.analysesSaved ?? 0;
     const responsesSaved = result.saveStats?.responsesSaved ?? 0;
-    const modelFailures = result.saveStats?.failed ?? 0;
+    const llmFailed = result.saveStats?.llmFailed ?? 0;
+    const analysisFailed = result.saveStats?.analysisFailed ?? 0;
+    const modelErrors = result.modelErrors ?? [];
+    const allKeyMissing =
+      modelErrors.length > 0 &&
+      modelErrors.every((e) => /not configured|No LLM API keys/i.test(e.error));
     const noAnalysis =
-      analysesSaved === 0 && responsesSaved === 0
-        ? modelFailures > 0 || (result.failed ?? 0) > 0
-          ? "no_llm_keys"
-          : "no_llm_responses"
-        : analysesSaved === 0
-          ? "analysis_insert_failed"
-          : null;
+      analysesSaved > 0
+        ? null
+        : modelErrors.length > 0 || llmFailed > 0
+          ? allKeyMissing
+            ? "no_llm_keys"
+            : "model_errors"
+          : responsesSaved === 0
+            ? "no_llm_responses"
+            : analysisFailed > 0
+              ? "analysis_insert_failed"
+              : "no_llm_responses";
 
     return Response.json({
-      success: !allFailed && analysesSaved > 0,
+      success: analysesSaved > 0,
       queued: false,
       ...result,
+      modelErrors: result.modelErrors?.length ? result.modelErrors : undefined,
       warning:
         noAnalysis === "analysis_insert_failed"
           ? "LLM responses were saved but analysis could not be written. Use Re-analyze saved or check Supabase migrations."
           : noAnalysis === "no_llm_keys"
-            ? "No LLM API keys configured. Add keys in Settings → API Keys or set OPENAI_API_KEY / ANTHROPIC_API_KEY on Vercel."
+            ? "No LLM API keys configured. Add OPENROUTER_API_KEY in Vercel (one key covers OpenAI/Claude/Gemini) or per-user keys in Settings → API Keys."
+            : noAnalysis === "model_errors"
+            ? "All configured models failed this run (quota, invalid model, or API error). Details are shown on the dashboard."
             : noAnalysis === "no_llm_responses"
               ? "No successful LLM responses in this run. Check Vercel logs for model errors."
               : undefined,

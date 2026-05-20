@@ -6,10 +6,12 @@ import type { LlmQueryCategory, LlmSentiment, LlmVisibilityQueryResult } from "@
 import { calculateQueryVisibilityScore } from "@/lib/utils/score-calculator";
 import { hasAnthropic, hasOpenAI } from "@/lib/config";
 
+const hasOpenRouterEnv = () => Boolean(process.env.OPENROUTER_API_KEY?.trim());
+
 const PROVIDER_ENV: Record<LlmKeyProviderName, () => boolean> = {
   openai: hasOpenAI,
   anthropic: hasAnthropic,
-  gemini: () => Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
+  gemini: () => hasOpenRouterEnv() || Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
   perplexity: () => Boolean(process.env.PERPLEXITY_API_KEY?.trim()),
 };
 

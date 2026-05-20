@@ -2,11 +2,25 @@ import type { AIModelKey, AnalysisResult, SentimentResult } from "./types";
 import { analyzeSentiment } from "./sentiment";
 import { detectPatterns } from "./recommendations";
 import { hasAnthropic, hasOpenAI, isDemoMode } from "@/lib/config";
+import { createOpenRouterClient, hasOpenRouter } from "@/lib/ai/openrouter-client";
+import { AI_MODELS } from "@/lib/ai/models";
 
 export type { AIModelKey } from "./types";
 
 async function queryAIModel(model: AIModelKey, prompt: string): Promise<string> {
   if (model === "openai" && hasOpenAI()) {
+    if (hasOpenRouter()) {
+      const client = createOpenRouterClient();
+      if (client) {
+        const res = await client.chat.completions.create({
+          model: AI_MODELS.openai,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.4,
+          max_tokens: 1200,
+        });
+        return res.choices[0]?.message?.content ?? "";
+      }
+    }
     const OpenAI = (await import("openai")).default;
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const res = await openai.chat.completions.create({
@@ -18,6 +32,18 @@ async function queryAIModel(model: AIModelKey, prompt: string): Promise<string> 
     return res.choices[0]?.message?.content ?? "";
   }
   if (model === "anthropic" && hasAnthropic()) {
+    if (hasOpenRouter()) {
+      const client = createOpenRouterClient();
+      if (client) {
+        const res = await client.chat.completions.create({
+          model: AI_MODELS.claude,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.4,
+          max_tokens: 1200,
+        });
+        return res.choices[0]?.message?.content ?? "";
+      }
+    }
     const Anthropic = (await import("@anthropic-ai/sdk")).default;
     const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
     const res = await anthropic.messages.create({

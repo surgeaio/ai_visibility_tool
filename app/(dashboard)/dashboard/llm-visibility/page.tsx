@@ -150,21 +150,41 @@ export default function LLMVisibilityPage() {
         error?: string;
         message?: string;
         warning?: string;
-        saveStats?: { analysesSaved?: number; responsesSaved?: number };
+        saveStats?: {
+          analysesSaved?: number;
+          responsesSaved?: number;
+          llmFailed?: number;
+          analysisFailed?: number;
+        };
+        modelErrors?: Array<{ model: string; error: string }>;
       };
       if (!res.ok) {
         throw new Error(json.error ?? json.message ?? "Run failed");
       }
       if (json.warning) {
-        toast.warning(json.warning);
+        toast.warning(json.warning, { duration: 8000 });
+      }
+      if (json.modelErrors?.length) {
+        const preview = json.modelErrors
+          .slice(0, 2)
+          .map((e) => `${e.model}: ${e.error.slice(0, 80)}`)
+          .join(" · ");
+        toast.error(`Model errors — ${preview}`, { duration: 10000 });
       }
       if (json.queued) {
         toast.success(json.message ?? "Prompts queued. Results in 2–3 minutes.");
       } else {
         const saved = json.saveStats?.analysesSaved ?? 0;
-        toast.success(
-          `Completed ${json.completed ?? 0} prompts (${json.failed ?? 0} failed). ${saved > 0 ? `${saved} analyses saved.` : ""}`,
-        );
+        const llmFailed = json.saveStats?.llmFailed ?? 0;
+        if (saved > 0) {
+          toast.success(
+            `Completed ${json.completed ?? 0} prompts. ${saved} analyses saved.`,
+          );
+        } else if (llmFailed > 0 || json.modelErrors?.length) {
+          // Warning/error toasts already shown above
+        } else if (!json.warning) {
+          toast.success(`Completed ${json.completed ?? 0} prompts.`);
+        }
         setRefreshKey((k) => k + 1);
       }
     } catch (err) {
@@ -301,14 +321,49 @@ export default function LLMVisibilityPage() {
               <p className="text-neutral-500">Loading visibility data…</p>
             </div>
           ) : data.empty ? (
-            <div className="rounded-xl border border-[#262626] bg-[#111] px-6 py-12 text-center">
-              <p className="font-medium text-white">No LLM visibility data yet</p>
-              <p className="mt-2 text-sm text-neutral-500">
-                Run prompts for this client to populate charts and tables.
-              </p>
-              <Button className="mt-4" size="sm" onClick={() => setRunModalOpen(true)}>
-                Run prompts now
-              </Button>
+            <div className="rounded-xl border border-[#262626] bg-[#111] px-6 py-12">
+              {data.emptyReason === "runs_failed" && (data.recentModelErrors?.length ?? 0) > 0 ? (
+                <>
+                  <p className="text-center font-medium text-white">
+                    Prompts ran but no visibility scores were saved
+                  </p>
+                  <p className="mt-2 text-center text-sm text-neutral-500">
+                    {data.responsesInRange ?? 0} model call(s) in the last {dateRange} — all failed or
+                    produced no analysis. Fix the errors below, then run again.
+                  </p>
+                  <ul className="mx-auto mt-4 max-w-2xl space-y-2 text-left text-xs text-red-200/90">
+                    {data.recentModelErrors?.map((e) => (
+                      <li
+                        key={e.model}
+                        className="rounded-lg border border-red-900/50 bg-red-950/20 px-3 py-2"
+                      >
+                        <span className="font-medium text-red-100">{e.model}</span>
+                        <span className="mt-1 block text-red-200/80">{e.error}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div className="mt-6 flex justify-center gap-2">
+                    <Button size="sm" onClick={() => void handleRunPromptsNow()} disabled={runningAll}>
+                      Retry run
+                    </Button>
+                    <Button size="sm" variant="secondary" onClick={() => void handleReanalyze()}>
+                      Re-analyze saved
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="text-center font-medium text-white">No LLM visibility data yet</p>
+                  <p className="mt-2 text-center text-sm text-neutral-500">
+                    Run prompts for this client to populate charts and tables.
+                  </p>
+                  <div className="mt-4 flex justify-center">
+                    <Button size="sm" onClick={() => void handleRunPromptsNow()} disabled={runningAll}>
+                      Run prompts now
+                    </Button>
+                  </div>
+                </>
+              )}
             </div>
           ) : (
             <>

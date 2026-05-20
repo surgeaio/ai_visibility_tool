@@ -1,14 +1,18 @@
+export function hasOpenRouterKey() {
+  return Boolean(process.env.OPENROUTER_API_KEY?.trim());
+}
+
 export function hasOpenAI() {
-  return Boolean(process.env.OPENAI_API_KEY?.trim());
+  return hasOpenRouterKey() || Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 export function hasAnthropic() {
-  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  return hasOpenRouterKey() || Boolean(process.env.ANTHROPIC_API_KEY?.trim());
 }
 
 /** Demo mode: no API keys — UI uses seeded data; APIs return mock analysis when keys missing */
 export function isDemoMode() {
-  return !hasOpenAI() && !hasAnthropic();
+  return !hasOpenRouterKey() && !hasOpenAI() && !hasAnthropic();
 }
 
 /**

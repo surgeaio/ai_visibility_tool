@@ -30,10 +30,12 @@ export async function GET() {
   const envOk = checkEnv();
   const supabaseOk = await checkSupabase();
 
+  const openRouter = Boolean(process.env.OPENROUTER_API_KEY?.trim());
   const providers = {
-    openai: Boolean(process.env.OPENAI_API_KEY?.trim()),
-    anthropic: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
-    google: Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
+    openrouter: openRouter,
+    openai: openRouter || Boolean(process.env.OPENAI_API_KEY?.trim()),
+    anthropic: openRouter || Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+    google: openRouter || Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
     perplexity: Boolean(process.env.PERPLEXITY_API_KEY?.trim()),
     serper: Boolean(process.env.SERPER_API_KEY?.trim()),
   };

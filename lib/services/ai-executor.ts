@@ -81,6 +81,12 @@ function resolveEnvApiKeys(): Map<AIModelName, string> {
     const slug = LLM_KEY_TO_PLATFORM_SLUG[p.provider] as AIModelName;
     if (slug) map.set(slug, p.apiKey);
   }
+  const openRouterKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (openRouterKey) {
+    if (!map.has("chatgpt")) map.set("chatgpt", openRouterKey);
+    if (!map.has("claude")) map.set("claude", openRouterKey);
+    if (!map.has("gemini")) map.set("gemini", openRouterKey);
+  }
   if (!map.has("chatgpt") && process.env.OPENAI_API_KEY) map.set("chatgpt", process.env.OPENAI_API_KEY);
   if (!map.has("claude") && process.env.ANTHROPIC_API_KEY) map.set("claude", process.env.ANTHROPIC_API_KEY);
   if (!map.has("gemini") && process.env.GOOGLE_AI_API_KEY) map.set("gemini", process.env.GOOGLE_AI_API_KEY);
@@ -124,20 +130,24 @@ export async function runPromptOnAllModels(
       status: "failed",
     }));
   }
+
+  const configuredModels = models.filter((m) => keys.has(m));
+  if (!configuredModels.length) {
+    return models.map((model) => ({
+      model,
+      responseText: "",
+      sources: [],
+      error: `${model} API key not configured`,
+      status: "failed",
+    }));
+  }
+
+  console.log(
+    `[ai-executor] Running ${configuredModels.length} model(s) with keys: ${configuredModels.join(", ")}`,
+  );
+
   const results = await Promise.all(
-    models.map(async (model) => {
-      const key = keys.get(model);
-      if (!key) {
-        return {
-          model,
-          responseText: "",
-          sources: [],
-          error: `${model} API key not configured`,
-          status: "failed" as const,
-        };
-      }
-      return runOnModel(model, prompt, key);
-    }),
+    configuredModels.map(async (model) => runOnModel(model, prompt, keys.get(model)!)),
   );
   return results;
 }
