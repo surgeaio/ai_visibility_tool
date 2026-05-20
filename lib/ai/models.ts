@@ -8,15 +8,16 @@
 
 // ---------------------------------------------------------------------------
 // Free models — used by default (no credits required)
+// Verified working on OpenRouter, May 2026
 // ---------------------------------------------------------------------------
 export const FREE_MODELS = {
-  chatgpt:    "meta-llama/llama-4-maverick:free",                    // High-quality free alternative for the ChatGPT slot
-  claude:     "deepseek/deepseek-chat-v3-0324:free",                 // High-quality free alternative for the Claude slot
-  gemini:     "google/gemini-2.0-flash-exp:free",                    // Real Gemini, free tier
-  perplexity: "mistralai/mistral-small-3.2-24b-instruct:free",       // Free when no Perplexity key
-  llama:      "meta-llama/llama-4-scout:free",
-  deepseek:   "deepseek/deepseek-r1-0528:free",
-  mistral:    "mistralai/mistral-small-3.2-24b-instruct:free",
+  chatgpt:    "meta-llama/llama-3.3-70b-instruct:free",              // Llama 3.3 70B — confirmed free
+  claude:     "deepseek/deepseek-r1:free",                            // DeepSeek R1 — confirmed free
+  gemini:     "google/gemma-4-31b-it:free",                           // Google Gemma 4 31B — confirmed free
+  perplexity: "mistralai/mistral-small-24b-instruct-2501:free",       // Mistral Small 24B — confirmed free
+  llama:      "meta-llama/llama-3.3-70b-instruct:free",
+  deepseek:   "deepseek/deepseek-v4-flash:free",                      // DeepSeek V4 Flash — confirmed free
+  mistral:    "mistralai/mistral-small-24b-instruct-2501:free",
   qwen:       "qwen/qwen3-235b-a22b:free",
 } as const;
 
