@@ -1,16 +1,18 @@
 /**
  * LLM model configuration for the visibility pipeline.
  *
- * Each slot uses its official provider SDK and API key — never OpenRouter.
- * Required env vars (add in Vercel → Settings → Environment Variables):
- *   OPENAI_API_KEY       → ChatGPT  (gpt-4o-mini)
- *   ANTHROPIC_API_KEY    → Claude   (claude-haiku-4-5)
- *   GOOGLE_API_KEY       → Gemini   (gemini-1.5-flash)
- *   PERPLEXITY_API_KEY   → Perplexity (sonar)
+ * Primary execution uses OpenRouter (single OPENROUTER_API_KEY).
+ * Direct provider SDK calls (fallback) use bare model names from PRODUCTION_MODELS.
+ *
+ * Required env var:
+ *   OPENROUTER_API_KEY  → powers ChatGPT, Claude, Gemini via one key
+ *
+ * Optional direct-provider fallbacks (used only when OPENROUTER_API_KEY is absent):
+ *   OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, PERPLEXITY_API_KEY
  */
 
 // ---------------------------------------------------------------------------
-// Official production models — one per provider
+// Bare model names — used only for direct provider SDK calls (fallback path)
 // ---------------------------------------------------------------------------
 export const PRODUCTION_MODELS = {
   chatgpt:    "gpt-4o-mini",
@@ -20,12 +22,24 @@ export const PRODUCTION_MODELS = {
 } as const;
 
 // ---------------------------------------------------------------------------
-// VISIBILITY_MODELS — maps DB slug → model name used in logs/analysis
+// AI_MODELS — OpenRouter model IDs (provider/model format).
+// Used by: providers, sentiment, response-analyzer, visibility-recommendations.
+// ---------------------------------------------------------------------------
+export const AI_MODELS = {
+  openai:  "openai/gpt-4o-mini",
+  claude:  "anthropic/claude-sonnet-4",
+  gemini:  "google/gemini-2.5-flash-preview",
+} as const;
+
+export type OpenRouterModelKey = keyof typeof AI_MODELS;
+
+// ---------------------------------------------------------------------------
+// VISIBILITY_MODELS — maps DB slug → OpenRouter model ID
 // ---------------------------------------------------------------------------
 export const VISIBILITY_MODELS: Record<string, string> = {
-  chatgpt:    PRODUCTION_MODELS.chatgpt,
-  claude:     PRODUCTION_MODELS.claude,
-  gemini:     PRODUCTION_MODELS.gemini,
+  chatgpt:    AI_MODELS.openai,
+  claude:     AI_MODELS.claude,
+  gemini:     AI_MODELS.gemini,
   perplexity: PRODUCTION_MODELS.perplexity,
 };
 
@@ -45,7 +59,7 @@ export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   perplexity: "Perplexity",
 };
 
-/** All models available for the UI dropdown (only official providers). */
+/** All models available for the UI dropdown. */
 export const ALL_AVAILABLE_MODELS: Array<{ slug: string; label: string }> = [
   { slug: "chatgpt",    label: "ChatGPT"    },
   { slug: "claude",     label: "Claude"     },
@@ -53,18 +67,7 @@ export const ALL_AVAILABLE_MODELS: Array<{ slug: string; label: string }> = [
   { slug: "perplexity", label: "Perplexity" },
 ];
 
-// ---------------------------------------------------------------------------
-// AI_MODELS — used by provider classes and analysis helpers
-// ---------------------------------------------------------------------------
-export const AI_MODELS = {
-  openai:  PRODUCTION_MODELS.chatgpt,
-  claude:  PRODUCTION_MODELS.claude,
-  gemini:  PRODUCTION_MODELS.gemini,
-} as const;
-
-export type OpenRouterModelKey = keyof typeof AI_MODELS;
-
-/** Map provider slugs → model names. */
+/** Map provider slugs → OpenRouter model IDs. */
 export const PROVIDER_TO_OPENROUTER_MODEL: Record<string, string> = {
   openai:    AI_MODELS.openai,
   chatgpt:   AI_MODELS.openai,
@@ -74,7 +77,7 @@ export const PROVIDER_TO_OPENROUTER_MODEL: Record<string, string> = {
   google:    AI_MODELS.gemini,
 };
 
-/** Resolve the model name for a given key, with optional runtime override. */
+/** Resolve the OpenRouter model ID for a given key, with optional runtime override. */
 export function resolveOpenRouterModel(
   key: OpenRouterModelKey,
   override?: string | null,
@@ -84,7 +87,5 @@ export function resolveOpenRouterModel(
   return AI_MODELS[key];
 }
 
-// ---------------------------------------------------------------------------
-// FREE_MODELS kept for any legacy references — mirrors production models
-// ---------------------------------------------------------------------------
+// FREE_MODELS kept for any legacy references
 export const FREE_MODELS = PRODUCTION_MODELS;

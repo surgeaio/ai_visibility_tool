@@ -1,4 +1,5 @@
 import OpenAI from "openai";
+import { OPENROUTER_BASE_URL } from "@/lib/ai/openrouter-client";
 import { UserApiKeysRepository } from "@/lib/repositories/user-api-keys.repo";
 
 export interface EngineRecommendation {
@@ -42,6 +43,35 @@ function staticFallback(brandName: string): EngineRecommendation[] {
   ];
 }
 
+function buildClient(openaiKey?: string): { client: OpenAI; model: string } | null {
+  // 1. Per-user OpenAI key (direct)
+  if (openaiKey) {
+    return {
+      client: new OpenAI({ apiKey: openaiKey, timeout: 60_000 }),
+      model: "gpt-4o-mini",
+    };
+  }
+
+  // 2. Admin OpenRouter key
+  const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
+  if (openrouterKey) {
+    return {
+      client: new OpenAI({
+        apiKey: openrouterKey,
+        baseURL: OPENROUTER_BASE_URL,
+        timeout: 60_000,
+        defaultHeaders: {
+          "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://localhost:3000",
+          "X-Title": "AI Visibility Tool",
+        },
+      }),
+      model: "openai/gpt-4o-mini",
+    };
+  }
+
+  return null;
+}
+
 export class RecommendationEngine {
   constructor(private readonly userId: string) {}
 
@@ -49,42 +79,51 @@ export class RecommendationEngine {
     const keysRepo = new UserApiKeysRepository();
     const keys = await keysRepo.listActiveLlmKeysDecrypted(this.userId);
     const openaiKey = keys.find((k) => k.provider === "openai")?.apiKey;
-    if (!openaiKey) {
+
+    const resolved = buildClient(openaiKey);
+    if (!resolved) {
+      console.warn("[recommendation-engine] No OpenAI key or OPENROUTER_API_KEY — using static fallback");
       return staticFallback(brandName);
     }
 
-    const client = new OpenAI({ apiKey: openaiKey, timeout: 60_000 });
-    const completion = await client.chat.completions.create({
-      model: "gpt-4o-mini",
-      temperature: 0.35,
-      response_format: { type: "json_object" },
-      messages: [
-        {
-          role: "system",
-          content: `You are a GEO + SEO strategist. Return JSON: { "items": AiRecPayload[] } where each item has title, category (one of llm|google|website|content|competitor), priority (critical|high|medium|low), summary (2-3 sentences).`,
-        },
-        {
-          role: "user",
-          content: `Brand id: ${brandId}. Brand name: ${brandName}. Propose 6 concrete, non-overlapping recommendations.`,
-        },
-      ],
-    });
+    const { client, model } = resolved;
 
-    const raw = completion.choices[0]?.message?.content ?? '{"items":[]}';
-    let parsed: { items: AiRecPayload[] };
     try {
-      parsed = JSON.parse(raw) as { items: AiRecPayload[] };
-    } catch {
+      const completion = await client.chat.completions.create({
+        model,
+        temperature: 0.35,
+        response_format: { type: "json_object" },
+        messages: [
+          {
+            role: "system",
+            content: `You are a GEO + SEO strategist. Return JSON: { "items": AiRecPayload[] } where each item has title, category (one of llm|google|website|content|competitor), priority (critical|high|medium|low), summary (2-3 sentences).`,
+          },
+          {
+            role: "user",
+            content: `Brand id: ${brandId}. Brand name: ${brandName}. Propose 6 concrete, non-overlapping recommendations.`,
+          },
+        ],
+      });
+
+      const raw = completion.choices[0]?.message?.content ?? '{"items":[]}';
+      let parsed: { items: AiRecPayload[] };
+      try {
+        parsed = JSON.parse(raw) as { items: AiRecPayload[] };
+      } catch {
+        return staticFallback(brandName);
+      }
+
+      const items = Array.isArray(parsed.items) ? parsed.items : [];
+      return items.slice(0, 10).map((item, i) => ({
+        id: `ai-rec-${brandId}-${i}`,
+        title: item.title,
+        category: item.category,
+        priority: item.priority,
+        summary: item.summary,
+      }));
+    } catch (err) {
+      console.error("[recommendation-engine] AI call failed, using static fallback:", err);
       return staticFallback(brandName);
     }
-
-    const items = Array.isArray(parsed.items) ? parsed.items : [];
-    return items.slice(0, 10).map((item, i) => ({
-      id: `ai-rec-${brandId}-${i}`,
-      title: item.title,
-      category: item.category,
-      priority: item.priority,
-      summary: item.summary,
-    }));
   }
 }

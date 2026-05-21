@@ -1,12 +1,16 @@
 /**
  * Unified LLM dispatcher for the visibility pipeline.
  *
- * Uses ONLY official provider SDKs — never routes through OpenRouter.
- * Each platform is called with its own API key from env vars.
+ * Execution priority:
+ *   1. OpenRouter (OPENROUTER_API_KEY) — single key for ChatGPT, Claude, Gemini
+ *   2. Direct provider SDK — fallback when OPENROUTER_API_KEY is absent
+ *
+ * Perplexity is always called directly (not available on standard OpenRouter plans).
  */
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import { OPENROUTER_BASE_URL } from "@/lib/ai/openrouter-client";
 
 export type LLMPlatform = "chatgpt" | "claude" | "gemini" | "perplexity";
 
@@ -24,11 +28,19 @@ export const PLATFORM_LABELS: Record<LLMPlatform, string> = {
   perplexity: "Perplexity",
 };
 
+/** Bare model names used for direct provider SDK calls (fallback path). */
 export const PLATFORM_MODELS: Record<LLMPlatform, string> = {
   chatgpt:    "gpt-4o-mini",
   claude:     "claude-haiku-4-5",
   gemini:     "gemini-1.5-flash",
   perplexity: "sonar",
+};
+
+/** OpenRouter model IDs (provider-prefixed) for the primary execution path. */
+const OPENROUTER_PLATFORM_MODELS: Record<Exclude<LLMPlatform, "perplexity">, string> = {
+  chatgpt: "openai/gpt-4o-mini",
+  claude:  "anthropic/claude-sonnet-4",
+  gemini:  "google/gemini-2.5-flash-preview",
 };
 
 export interface LLMSuccess {
@@ -54,16 +66,98 @@ const SYSTEM_PROMPT =
 
 const TIMEOUT_MS = 45_000;
 
+function buildOpenRouterClient(apiKey: string): OpenAI {
+  return new OpenAI({
+    apiKey,
+    baseURL: OPENROUTER_BASE_URL,
+    timeout: TIMEOUT_MS,
+    defaultHeaders: {
+      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://localhost:3000",
+      "X-Title": "AI Visibility Tool",
+    },
+  });
+}
+
 export async function callLLM(
   platform: LLMPlatform,
   prompt: string,
 ): Promise<LLMResult> {
-  const model = PLATFORM_MODELS[platform];
   try {
+    // -----------------------------------------------------------------------
+    // Perplexity — direct API only (not on OpenRouter standard plans)
+    // -----------------------------------------------------------------------
+    if (platform === "perplexity") {
+      const key = process.env.PERPLEXITY_API_KEY?.trim();
+      if (!key) {
+        throw new Error("PERPLEXITY_API_KEY is not configured");
+      }
+      const model = PLATFORM_MODELS.perplexity;
+      const res = await fetch("https://api.perplexity.ai/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${key}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            { role: "system", content: SYSTEM_PROMPT },
+            { role: "user", content: prompt },
+          ],
+          max_tokens: 1200,
+        }),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => res.statusText);
+        throw new Error(`Perplexity ${res.status}: ${body}`);
+      }
+      const json = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+        citations?: string[];
+        usage?: { prompt_tokens?: number; completion_tokens?: number };
+      };
+      const text = json.choices?.[0]?.message?.content ?? "";
+      const sources = (json.citations ?? []).map((url) => ({ url }));
+      const tokensUsed =
+        (json.usage?.prompt_tokens ?? 0) + (json.usage?.completion_tokens ?? 0);
+      console.log(`[llm-providers] perplexity OK (${text.length} chars)`);
+      return { platform, model, text, sources, tokensUsed, ok: true };
+    }
+
+    // -----------------------------------------------------------------------
+    // ChatGPT / Claude / Gemini — OpenRouter first, direct SDK as fallback
+    // -----------------------------------------------------------------------
+    const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
+
+    if (openrouterKey) {
+      const openrouterModel = OPENROUTER_PLATFORM_MODELS[platform];
+      const client = buildOpenRouterClient(openrouterKey);
+      const res = await client.chat.completions.create({
+        model: openrouterModel,
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          { role: "user", content: prompt },
+        ],
+        max_tokens: 1200,
+        temperature: 0.3,
+      });
+      const text = res.choices[0]?.message?.content ?? "";
+      const tokensUsed = res.usage?.total_tokens;
+      console.log(`[llm-providers] ${platform} via OpenRouter OK (${text.length} chars)`);
+      return { platform, model: openrouterModel, text, sources: [], tokensUsed, ok: true };
+    }
+
+    // Direct provider SDK fallback
     switch (platform) {
       case "chatgpt": {
         const key = process.env.OPENAI_API_KEY?.trim();
-        if (!key) throw new Error("OPENAI_API_KEY is not configured in Vercel environment variables");
+        if (!key) {
+          throw new Error(
+            "No OPENROUTER_API_KEY or OPENAI_API_KEY configured. Add OPENROUTER_API_KEY in Vercel → Settings → Environment Variables.",
+          );
+        }
+        const model = PLATFORM_MODELS.chatgpt;
         const client = new OpenAI({ apiKey: key, timeout: TIMEOUT_MS });
         const res = await client.chat.completions.create({
           model,
@@ -76,13 +170,18 @@ export async function callLLM(
         });
         const text = res.choices[0]?.message?.content ?? "";
         const tokensUsed = res.usage?.total_tokens;
-        console.log(`[llm-providers] chatgpt OK (${text.length} chars)`);
+        console.log(`[llm-providers] chatgpt direct OK (${text.length} chars)`);
         return { platform, model, text, sources: [], tokensUsed, ok: true };
       }
 
       case "claude": {
         const key = process.env.ANTHROPIC_API_KEY?.trim();
-        if (!key) throw new Error("ANTHROPIC_API_KEY is not configured in Vercel environment variables");
+        if (!key) {
+          throw new Error(
+            "No OPENROUTER_API_KEY or ANTHROPIC_API_KEY configured. Add OPENROUTER_API_KEY in Vercel → Settings → Environment Variables.",
+          );
+        }
+        const model = PLATFORM_MODELS.claude;
         const client = new Anthropic({ apiKey: key, timeout: TIMEOUT_MS });
         const res = await client.messages.create({
           model,
@@ -95,7 +194,7 @@ export async function callLLM(
           .map((b) => (b as { type: "text"; text: string }).text)
           .join("\n");
         const tokensUsed = (res.usage?.input_tokens ?? 0) + (res.usage?.output_tokens ?? 0);
-        console.log(`[llm-providers] claude OK (${text.length} chars)`);
+        console.log(`[llm-providers] claude direct OK (${text.length} chars)`);
         return { platform, model, text, sources: [], tokensUsed, ok: true };
       }
 
@@ -103,7 +202,12 @@ export async function callLLM(
         const key =
           process.env.GOOGLE_API_KEY?.trim() ||
           process.env.GOOGLE_AI_API_KEY?.trim();
-        if (!key) throw new Error("GOOGLE_API_KEY is not configured in Vercel environment variables");
+        if (!key) {
+          throw new Error(
+            "No OPENROUTER_API_KEY or GOOGLE_API_KEY configured. Add OPENROUTER_API_KEY in Vercel → Settings → Environment Variables.",
+          );
+        }
+        const model = PLATFORM_MODELS.gemini;
         const genAI = new GoogleGenerativeAI(key);
         const m = genAI.getGenerativeModel({
           model,
@@ -117,63 +221,37 @@ export async function callLLM(
         const usage = result.response.usageMetadata;
         const tokensUsed =
           (usage?.promptTokenCount ?? 0) + (usage?.candidatesTokenCount ?? 0);
-        console.log(`[llm-providers] gemini OK (${text.length} chars)`);
+        console.log(`[llm-providers] gemini direct OK (${text.length} chars)`);
         return { platform, model, text, sources: [], tokensUsed, ok: true };
-      }
-
-      case "perplexity": {
-        const key = process.env.PERPLEXITY_API_KEY?.trim();
-        if (!key) throw new Error("PERPLEXITY_API_KEY is not configured in Vercel environment variables");
-        const res = await fetch("https://api.perplexity.ai/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${key}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model,
-            messages: [
-              { role: "system", content: SYSTEM_PROMPT },
-              { role: "user", content: prompt },
-            ],
-            max_tokens: 1200,
-          }),
-          signal: AbortSignal.timeout(TIMEOUT_MS),
-        });
-        if (!res.ok) {
-          const body = await res.text().catch(() => res.statusText);
-          throw new Error(`Perplexity ${res.status}: ${body}`);
-        }
-        const json = (await res.json()) as {
-          choices?: Array<{ message?: { content?: string } }>;
-          citations?: string[];
-          usage?: { prompt_tokens?: number; completion_tokens?: number };
-        };
-        const text = json.choices?.[0]?.message?.content ?? "";
-        const sources = (json.citations ?? []).map((url) => ({ url }));
-        const tokensUsed =
-          (json.usage?.prompt_tokens ?? 0) + (json.usage?.completion_tokens ?? 0);
-        console.log(`[llm-providers] perplexity OK (${text.length} chars)`);
-        return { platform, model, text, sources, tokensUsed, ok: true };
       }
     }
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     console.error(`[llm-providers] ${platform} FAILED:`, error);
-    return { platform, model, error, ok: false };
+    return { platform, model: PLATFORM_MODELS[platform], error, ok: false };
   }
 }
 
-/** Returns platforms that have their API key configured. */
+/**
+ * Returns platforms that are executable — either via OpenRouter or their direct key.
+ * When OPENROUTER_API_KEY is set, chatgpt/claude/gemini are all available.
+ */
 export function getAvailablePlatforms(
   requested: LLMPlatform[] = ENABLED_PLATFORMS,
 ): LLMPlatform[] {
+  const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY?.trim());
   return requested.filter((p) => {
+    if (p === "perplexity") {
+      return Boolean(process.env.PERPLEXITY_API_KEY?.trim());
+    }
+    // chatgpt / claude / gemini — available via OpenRouter OR direct key
+    if (hasOpenRouter) return true;
     switch (p) {
-      case "chatgpt":    return Boolean(process.env.OPENAI_API_KEY?.trim());
-      case "claude":     return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
-      case "gemini":     return Boolean(process.env.GOOGLE_API_KEY?.trim() || process.env.GOOGLE_AI_API_KEY?.trim());
-      case "perplexity": return Boolean(process.env.PERPLEXITY_API_KEY?.trim());
+      case "chatgpt": return Boolean(process.env.OPENAI_API_KEY?.trim());
+      case "claude":  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+      case "gemini":  return Boolean(
+        process.env.GOOGLE_API_KEY?.trim() || process.env.GOOGLE_AI_API_KEY?.trim(),
+      );
     }
   });
 }
