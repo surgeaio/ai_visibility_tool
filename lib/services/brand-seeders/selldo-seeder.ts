@@ -505,7 +505,62 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
     }
   }
 
-  // ── 6. AI Recommendations (6 GEO-specific) ───────────────────────────────
+  // ── 6. Citations table (19 rows — legacy table read by /api/citations) ──────
+  // /api/citations queries `citations` table, NOT source_appearances.
+
+  const { count: existingCitations } = await db
+    .from("citations")
+    .select("id", { count: "exact", head: true })
+    .eq("brand_id", brandId);
+
+  if ((existingCitations ?? 0) === 0) {
+    const citationRows = [
+      // sell.do — 6 rows
+      { url: "https://sell.do",                                  domain: "sell.do",              provider: "ChatGPT",            daysAgoN: 1 },
+      { url: "https://sell.do/real-estate-crm",                  domain: "sell.do",              provider: "Gemini",             daysAgoN: 3 },
+      { url: "https://sell.do/blog/best-crm-india",              domain: "sell.do",              provider: "Claude",             daysAgoN: 5 },
+      { url: "https://sell.do/pricing",                          domain: "sell.do",              provider: "Google AI Overviews", daysAgoN: 7 },
+      { url: "https://sell.do/case-studies/real-estate",         domain: "sell.do",              provider: "ChatGPT",            daysAgoN: 10 },
+      { url: "https://sell.do/integrations/whatsapp",            domain: "sell.do",              provider: "Gemini",             daysAgoN: 14 },
+      // softwaresuggest.com — 5 rows
+      { url: "https://softwaresuggest.com/sell-do",              domain: "softwaresuggest.com",  provider: "ChatGPT",            daysAgoN: 2 },
+      { url: "https://softwaresuggest.com/real-estate-crm",      domain: "softwaresuggest.com",  provider: "Gemini",             daysAgoN: 6 },
+      { url: "https://softwaresuggest.com/compare/sell-zoho",    domain: "softwaresuggest.com",  provider: "Claude",             daysAgoN: 9 },
+      { url: "https://softwaresuggest.com/sell-vs-hubspot",      domain: "softwaresuggest.com",  provider: "Google AI Overviews", daysAgoN: 13 },
+      { url: "https://softwaresuggest.com/crm-comparison",       domain: "softwaresuggest.com",  provider: "Gemini",             daysAgoN: 18 },
+      // g2.com — 3 rows
+      { url: "https://g2.com/products/sell-do",                  domain: "g2.com",               provider: "ChatGPT",            daysAgoN: 4 },
+      { url: "https://g2.com/categories/real-estate-crm",        domain: "g2.com",               provider: "Claude",             daysAgoN: 11 },
+      { url: "https://g2.com/compare/sell-do-vs-hubspot",        domain: "g2.com",               provider: "Gemini",             daysAgoN: 16 },
+      // capterra.com — 3 rows
+      { url: "https://capterra.com/p/sell-do",                   domain: "capterra.com",         provider: "ChatGPT",            daysAgoN: 8 },
+      { url: "https://capterra.com/real-estate-software",        domain: "capterra.com",         provider: "Google AI Overviews", daysAgoN: 15 },
+      { url: "https://capterra.com/lead-management",             domain: "capterra.com",         provider: "Gemini",             daysAgoN: 22 },
+      // linkedin.com — 2 rows
+      { url: "https://linkedin.com/company/sell-do",             domain: "linkedin.com",         provider: "ChatGPT",            daysAgoN: 12 },
+      { url: "https://linkedin.com/pulse/best-crm-real-estate",  domain: "linkedin.com",         provider: "Claude",             daysAgoN: 20 },
+    ];
+
+    let citationsSaved = 0;
+    for (const row of citationRows) {
+      const createdAt = new Date(Date.now() - row.daysAgoN * 86400_000).toISOString();
+      const { error } = await db.from("citations").insert({
+        brand_id: brandId,
+        url: row.url,
+        domain: row.domain,
+        provider: row.provider,
+        created_at: createdAt,
+      });
+      if (error) {
+        logger.warn(MODULE, `Citation insert failed: ${row.url}`, { code: error.code, msg: error.message });
+      } else {
+        citationsSaved++;
+      }
+    }
+    logger.info(MODULE, `Sell.Do citations seeded: ${citationsSaved}`, { brandId });
+  }
+
+  // ── 7. AI Recommendations (6 GEO-specific) ───────────────────────────────
 
   const { count: existingRecs } = await db
     .from("ai_recommendations")

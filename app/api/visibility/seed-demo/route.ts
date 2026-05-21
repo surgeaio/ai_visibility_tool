@@ -97,7 +97,7 @@ export async function GET(req: Request) {
   try {
     const admin = createAdminSupabaseClient();
 
-    const [resp, ana, metrics, recs, comps, sources, prompts] = await Promise.all([
+    const [resp, ana, metrics, recs, comps, sources, prompts, cits] = await Promise.all([
       admin.from("chat_responses").select("id", { count: "exact", head: true }).eq("brand_id", brandId),
       admin.from("chat_analysis").select("id", { count: "exact", head: true }).eq("brand_id", brandId),
       admin.from("brand_daily_metrics").select("id", { count: "exact", head: true }).eq("brand_id", brandId),
@@ -105,6 +105,7 @@ export async function GET(req: Request) {
       admin.from("competitors").select("id", { count: "exact", head: true }).eq("brand_id", brandId),
       admin.from("source_appearances").select("id", { count: "exact", head: true }).eq("brand_id", brandId),
       admin.from("prompts").select("id", { count: "exact", head: true }).eq("brand_id", brandId),
+      admin.from("citations").select("id", { count: "exact", head: true }).eq("brand_id", brandId),
     ]);
 
     // Check if sifthub-specific prompt exists
@@ -122,6 +123,7 @@ export async function GET(req: Request) {
       competitors:         comps.count   ?? 0,
       source_appearances:  sources.count ?? 0,
       prompts:             prompts.count ?? 0,
+      citations:           cits.count    ?? 0,
     };
 
     return Response.json({
@@ -129,8 +131,8 @@ export async function GET(req: Request) {
       sifthubSpecificDataPresent: (rfpCount ?? 0) > 0,
       counts,
       expected: {
-        sifthub: { prompts: 28, chat_responses: 56, chat_analysis: 56, brand_daily_metrics: 21, competitors: 4, ai_recommendations: 5 },
-        selldo:  { prompts: 15, chat_responses: 60, chat_analysis: 60, brand_daily_metrics: 150, competitors: 3, ai_recommendations: 6 },
+        sifthub: { prompts: 28, chat_responses: 56, chat_analysis: 56, brand_daily_metrics: 21, competitors: 4, ai_recommendations: 5, citations: 16 },
+        selldo:  { prompts: 15, chat_responses: 60, chat_analysis: 60, brand_daily_metrics: 150, competitors: 3, ai_recommendations: 6, citations: 19 },
       },
       requestId,
     });

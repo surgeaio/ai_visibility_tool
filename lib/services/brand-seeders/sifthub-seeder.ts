@@ -661,7 +661,60 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
     }
   }
 
-  // ── 6. AI Recommendations (5 GEO-specific) ───────────────────────────────
+  // ── 6. Citations table (16 rows — legacy table read by /api/citations) ─────
+  // The /api/citations route queries the legacy `citations` table, NOT source_appearances.
+  // We must insert here for the Citations dashboard page to render correctly.
+
+  const { count: existingCitations } = await db
+    .from("citations")
+    .select("id", { count: "exact", head: true })
+    .eq("brand_id", brandId);
+
+  if ((existingCitations ?? 0) === 0) {
+    const citationRows = [
+      // sifthub.io — 5 rows
+      { url: "https://sifthub.io",                            domain: "sifthub.io",      provider: "ChatGPT",            daysAgoN: 2 },
+      { url: "https://sifthub.io/product",                    domain: "sifthub.io",      provider: "Google AI Overviews", daysAgoN: 4 },
+      { url: "https://sifthub.io/pricing",                    domain: "sifthub.io",      provider: "ChatGPT",            daysAgoN: 6 },
+      { url: "https://sifthub.io/blog/ai-rfp-automation",     domain: "sifthub.io",      provider: "Google AI Overviews", daysAgoN: 8 },
+      { url: "https://sifthub.io/case-studies",               domain: "sifthub.io",      provider: "ChatGPT",            daysAgoN: 11 },
+      // g2.com — 4 rows
+      { url: "https://g2.com/products/sifthub/reviews",       domain: "g2.com",          provider: "ChatGPT",            daysAgoN: 3 },
+      { url: "https://g2.com/categories/rfp-software",        domain: "g2.com",          provider: "Google AI Overviews", daysAgoN: 5 },
+      { url: "https://g2.com/compare/sifthub-vs-loopio",      domain: "g2.com",          provider: "ChatGPT",            daysAgoN: 9 },
+      { url: "https://g2.com/compare/sifthub-vs-responsive",  domain: "g2.com",          provider: "Google AI Overviews", daysAgoN: 13 },
+      // capterra.com — 3 rows
+      { url: "https://capterra.com/p/sifthub",                domain: "capterra.com",    provider: "ChatGPT",            daysAgoN: 7 },
+      { url: "https://capterra.com/proposal-management",      domain: "capterra.com",    provider: "Google AI Overviews", daysAgoN: 12 },
+      { url: "https://capterra.com/rfp-software",             domain: "capterra.com",    provider: "ChatGPT",            daysAgoN: 17 },
+      // trustradius.com — 2 rows
+      { url: "https://trustradius.com/products/sifthub",      domain: "trustradius.com", provider: "ChatGPT",            daysAgoN: 14 },
+      { url: "https://trustradius.com/proposal-software",     domain: "trustradius.com", provider: "Google AI Overviews", daysAgoN: 19 },
+      // reddit.com — 2 rows
+      { url: "https://reddit.com/r/sales/comments/abc123",    domain: "reddit.com",      provider: "ChatGPT",            daysAgoN: 21 },
+      { url: "https://reddit.com/r/presales/best-rfp-tools",  domain: "reddit.com",      provider: "Google AI Overviews", daysAgoN: 25 },
+    ];
+
+    let citationsSaved = 0;
+    for (const row of citationRows) {
+      const createdAt = new Date(Date.now() - row.daysAgoN * 86400_000).toISOString();
+      const { error } = await db.from("citations").insert({
+        brand_id: brandId,
+        url: row.url,
+        domain: row.domain,
+        provider: row.provider,
+        created_at: createdAt,
+      });
+      if (error) {
+        logger.persist(MODULE, "fail", { event: "sifthub_citation_insert_failed", url: row.url, code: error.code, msg: error.message });
+      } else {
+        citationsSaved++;
+      }
+    }
+    logger.persist(MODULE, "ok", { event: "sifthub_citations_done", count: citationsSaved, brandId });
+  }
+
+  // ── 7. AI Recommendations (5 GEO-specific) ───────────────────────────────
 
   const { count: existingRecs } = await db
     .from("ai_recommendations")

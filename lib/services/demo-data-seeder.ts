@@ -128,11 +128,14 @@ async function cleanBrandDemoData(brandId: string): Promise<void> {
   const supabase = createAdminSupabaseClient();
   logger.info(MODULE, "Cleaning existing demo data for re-seed", { brandId });
 
-  // Deleting chat_responses cascades to chat_analysis + source_appearances (linked rows)
+  // Deleting chat_responses cascades to chat_analysis + linked source_appearances
   await supabase.from("chat_responses").delete().eq("brand_id", brandId);
 
   // Delete orphaned source_appearances (chat_response_id IS NULL = domain-level citations)
   await supabase.from("source_appearances").delete().eq("brand_id", brandId);
+
+  // Delete legacy citations table rows (read by /api/citations)
+  await supabase.from("citations").delete().eq("brand_id", brandId);
 
   // Delete metrics and recommendations
   await supabase.from("brand_daily_metrics").delete().eq("brand_id", brandId);

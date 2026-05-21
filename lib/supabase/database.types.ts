@@ -1133,6 +1133,34 @@ export interface Database {
         Update: Record<string, unknown>;
         Relationships: [];
       };
+      citations: {
+        Row: {
+          id: string;
+          response_id: string | null;
+          brand_id: string | null;
+          provider: string | null;
+          url: string;
+          domain: string;
+          title: string | null;
+          snippet: string | null;
+          citation_position: number | null;
+          created_at: string | null;
+        };
+        Insert: {
+          id?: string;
+          response_id?: string | null;
+          brand_id?: string | null;
+          provider?: string | null;
+          url: string;
+          domain: string;
+          title?: string | null;
+          snippet?: string | null;
+          citation_position?: number | null;
+          created_at?: string | null;
+        };
+        Update: Record<string, unknown>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: Record<string, never>;
