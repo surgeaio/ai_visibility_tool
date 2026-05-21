@@ -270,29 +270,28 @@ const SELLDO_CITATION_SPECS = [
 export async function seedSellDoCitations(brandId: string): Promise<number> {
   const db = createAdminSupabaseClient();
 
-  const { count: existing } = await db
-    .from("citations")
-    .select("id", { count: "exact", head: true })
-    .eq("brand_id", brandId);
-
-  if ((existing ?? 0) > 0) return 0;
-
+  // Upsert on (brand_id, url, provider) — idempotent against concurrent calls.
+  // ensureCitationsExist() gates this with a count check, so we skip the
+  // redundant pre-check here and rely on the unique index for safety.
   let saved = 0;
   for (const row of SELLDO_CITATION_SPECS) {
-    const { error } = await db.from("citations").insert({
-      brand_id: brandId,
-      url: row.url,
-      domain: row.domain,
-      provider: row.provider,
-      created_at: new Date(Date.now() - row.daysAgoN * 86400_000).toISOString(),
-    });
+    const { error } = await db.from("citations").upsert(
+      {
+        brand_id: brandId,
+        url: row.url,
+        domain: row.domain,
+        provider: row.provider,
+        created_at: new Date(Date.now() - row.daysAgoN * 86400_000).toISOString(),
+      },
+      { onConflict: "brand_id,url,provider", ignoreDuplicates: true },
+    );
     if (error) {
-      logger.warn(MODULE, `Citation insert failed: ${row.url}`, { code: error.code, msg: error.message });
+      logger.warn(MODULE, `Citation upsert failed: ${row.url}`, { code: error.code, msg: error.message });
     } else {
       saved++;
     }
   }
-  logger.info(MODULE, `Sell.Do citations seeded: ${saved}`, { brandId });
+  logger.info(MODULE, `Sell.Do citations upserted: ${saved}`, { brandId });
   return saved;
 }
 
@@ -333,29 +332,21 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
   for (let i = 0; i < SELLDO_PROMPTS.length; i++) {
     const text = SELLDO_PROMPTS[i];
 
-    const { data: existing } = await db
+    // Upsert on (brand_id, text) — idempotent against concurrent calls.
+    const { data: upserted, error } = await db
       .from("prompts")
-      .select("id")
-      .eq("brand_id", brandId)
-      .eq("text", text)
-      .maybeSingle();
-
-    if (existing) {
-      promptIdMap.set(i, existing.id as string);
-      continue;
-    }
-
-    const { data: newPrompt, error } = await db
-      .from("prompts")
-      .insert({ brand_id: brandId, text, is_active: true, category: "Real Estate CRM" })
+      .upsert(
+        { brand_id: brandId, text, is_active: true, category: "Real Estate CRM" },
+        { onConflict: "brand_id,text" },
+      )
       .select("id")
       .single();
 
-    if (error || !newPrompt) {
-      logger.warn(MODULE, `Prompt insert failed: ${text}`, { error: error?.message });
+    if (error || !upserted) {
+      logger.warn(MODULE, `Prompt upsert failed: ${text}`, { error: error?.message });
       continue;
     }
-    promptIdMap.set(i, newPrompt.id as string);
+    promptIdMap.set(i, upserted.id as string);
     result.promptsSaved++;
   }
 
@@ -369,6 +360,7 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
     const promptText = SELLDO_PROMPTS[i];
 
     for (const model of MODELS) {
+      // Skip if response already exists for this prompt+model+date (efficiency guard).
       const { count: existing } = await db
         .from("chat_responses")
         .select("id", { count: "exact", head: true })
@@ -397,9 +389,11 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
         { url: "https://capterra.com" },
       ];
 
+      // Upsert on (brand_id, prompt_id, ai_model, run_date) — idempotent.
       const { data: savedResp, error: respErr } = await db
         .from("chat_responses")
-        .insert({
+        .upsert(
+          {
           brand_id: brandId,
           prompt_id: promptId,
           ai_model: model,
@@ -409,7 +403,9 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
           tokens_used: Math.floor(Math.random() * 350) + 150,
           status: "success",
           run_date: runDate,
-        })
+          },
+          { onConflict: "brand_id,prompt_id,ai_model,run_date" },
+        )
         .select("id")
         .single();
 
@@ -423,20 +419,24 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
       const sentimentLabel: "positive" | "neutral" | "negative" =
         sentimentScore >= 60 ? "positive" : sentimentScore >= 40 ? "neutral" : "negative";
 
-      const { error: anaErr } = await db.from("chat_analysis").insert({
-        chat_response_id: savedResp.id as string,
-        brand_id: brandId,
-        prompt_id: promptId,
-        ai_model: model,
-        run_date: runDate,
-        brand_mentioned: mentionsSelldo,
-        brand_position: mentionsSelldo ? (selldoMention?.position ?? 4) : null,
-        brand_sentiment: mentionsSelldo ? sentimentScore : null,
-        brand_sentiment_label: mentionsSelldo ? sentimentLabel : null,
-        brand_mention_context: mentionsSelldo ? responseText.slice(0, 200) : null,
-        all_brands_mentioned: allBrands,
-        sources_used: rawSources.map((s) => ({ domain: new URL(s.url).hostname })),
-      });
+      // Upsert on (chat_response_id) — one analysis per response.
+      const { error: anaErr } = await db.from("chat_analysis").upsert(
+        {
+          chat_response_id: savedResp.id as string,
+          brand_id: brandId,
+          prompt_id: promptId,
+          ai_model: model,
+          run_date: runDate,
+          brand_mentioned: mentionsSelldo,
+          brand_position: mentionsSelldo ? (selldoMention?.position ?? 4) : null,
+          brand_sentiment: mentionsSelldo ? sentimentScore : null,
+          brand_sentiment_label: mentionsSelldo ? sentimentLabel : null,
+          brand_mention_context: mentionsSelldo ? responseText.slice(0, 200) : null,
+          all_brands_mentioned: allBrands,
+          sources_used: rawSources.map((s) => ({ domain: new URL(s.url).hostname })),
+        },
+        { onConflict: "chat_response_id", ignoreDuplicates: true },
+      );
 
       if (anaErr) {
         logger.warn(MODULE, `chat_analysis failed (${model} prompt=${i})`, { error: anaErr.message });
@@ -444,19 +444,23 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
         result.analysesSaved++;
       }
 
+      // Upsert source_appearances per response on (brand_id, chat_response_id, url).
       for (const src of rawSources) {
         const domain = new URL(src.url).hostname.replace(/^www\./, "");
-        await db.from("source_appearances").insert({
-          brand_id: brandId,
-          chat_response_id: savedResp.id as string,
-          prompt_id: promptId,
-          ai_model: model,
-          domain,
-          url: src.url,
-          was_cited: true,
-          was_used: true,
-          run_date: runDate,
-        });
+        await db.from("source_appearances").upsert(
+          {
+            brand_id: brandId,
+            chat_response_id: savedResp.id as string,
+            prompt_id: promptId,
+            ai_model: model,
+            domain,
+            url: src.url,
+            was_cited: true,
+            was_used: true,
+            run_date: runDate,
+          },
+          { onConflict: "brand_id,chat_response_id,url", ignoreDuplicates: true },
+        );
       }
     }
   }
@@ -510,23 +514,19 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
     { competitor_name: "Freshworks", domain: "freshworks.com", website: "https://freshworks.com" },
   ];
 
+  // Upsert on (brand_id, competitor_name) — idempotent.
   for (const comp of selldoCompetitors) {
-    const { count: existing } = await db
-      .from("competitors")
-      .select("id", { count: "exact", head: true })
-      .eq("brand_id", brandId)
-      .eq("competitor_name", comp.competitor_name);
-
-    if ((existing ?? 0) === 0) {
-      const { error } = await db.from("competitors").insert({
+    const { error } = await db.from("competitors").upsert(
+      {
         brand_id: brandId,
         competitor_name: comp.competitor_name,
         domain: comp.domain,
         website: comp.website,
         is_tracked: true,
-      });
-      if (!error) result.competitorsSaved++;
-    }
+      },
+      { onConflict: "brand_id,competitor_name", ignoreDuplicates: true },
+    );
+    if (!error) result.competitorsSaved++;
   }
 
   // ── 5. Source appearances (5 domains) ────────────────────────────────────
@@ -626,11 +626,13 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
       },
     ];
 
-    const { error } = await db.from("ai_recommendations").insert(
+    // Upsert on (brand_id, title) — idempotent.
+    const { error } = await db.from("ai_recommendations").upsert(
       recs.map((r) => ({ brand_id: brandId, ...r, status: "open" })),
+      { onConflict: "brand_id,title", ignoreDuplicates: true },
     );
     if (!error) result.recommendationsSaved = recs.length;
-    else logger.warn(MODULE, "Recommendations insert failed", { error: error.message });
+    else logger.warn(MODULE, "Recommendations upsert failed", { error: error.message });
   }
 
   result.seeded = true;

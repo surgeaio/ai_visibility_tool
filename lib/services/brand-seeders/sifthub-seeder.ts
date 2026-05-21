@@ -374,22 +374,21 @@ const SIFTHUB_CITATION_SPECS = [
 export async function seedSifthubCitations(brandId: string): Promise<number> {
   const db = createAdminSupabaseClient();
 
-  const { count: existing } = await db
-    .from("citations")
-    .select("id", { count: "exact", head: true })
-    .eq("brand_id", brandId);
-
-  if ((existing ?? 0) > 0) return 0;
-
+  // Upsert on (brand_id, url, provider) — idempotent against concurrent calls.
+  // ensureCitationsExist() gates this with a count check, so we skip the
+  // redundant pre-check here and rely on the unique index for safety.
   let saved = 0;
   for (const row of SIFTHUB_CITATION_SPECS) {
-    const { error } = await db.from("citations").insert({
-      brand_id: brandId,
-      url: row.url,
-      domain: row.domain,
-      provider: row.provider,
-      created_at: new Date(Date.now() - row.daysAgoN * 86400_000).toISOString(),
-    });
+    const { error } = await db.from("citations").upsert(
+      {
+        brand_id: brandId,
+        url: row.url,
+        domain: row.domain,
+        provider: row.provider,
+        created_at: new Date(Date.now() - row.daysAgoN * 86400_000).toISOString(),
+      },
+      { onConflict: "brand_id,url,provider", ignoreDuplicates: true },
+    );
     if (error) {
       logger.persist(MODULE, "fail", { event: "sifthub_citation_insert_failed", url: row.url, code: error.code, msg: error.message });
     } else {
@@ -437,30 +436,22 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
   for (let i = 0; i < SIFTHUB_PROMPTS.length; i++) {
     const text = SIFTHUB_PROMPTS[i];
 
-    // Check if prompt already exists
-    const { data: existing } = await db
+    // Upsert: insert or return existing row on (brand_id, text) conflict.
+    // Requires idx_prompts_brand_text unique index (migration 20260526000000).
+    const { data: upserted, error } = await db
       .from("prompts")
-      .select("id")
-      .eq("brand_id", brandId)
-      .eq("text", text)
-      .maybeSingle();
-
-    if (existing) {
-      promptIdMap.set(i, existing.id as string);
-      continue;
-    }
-
-    const { data: newPrompt, error } = await db
-      .from("prompts")
-      .insert({ brand_id: brandId, text, is_active: true, category: "RFP & Proposals" })
+      .upsert(
+        { brand_id: brandId, text, is_active: true, category: "RFP & Proposals" },
+        { onConflict: "brand_id,text" },
+      )
       .select("id")
       .single();
 
-    if (error || !newPrompt) {
-      logger.warn(MODULE, `Prompt insert failed: ${text}`, { error: error?.message });
+    if (error || !upserted) {
+      logger.warn(MODULE, `Prompt upsert failed: ${text}`, { error: error?.message });
       continue;
     }
-    promptIdMap.set(i, newPrompt.id as string);
+    promptIdMap.set(i, upserted.id as string);
     result.promptsSaved++;
   }
 
@@ -478,7 +469,8 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
     const promptText = SIFTHUB_PROMPTS[i];
 
     for (const model of MODELS) {
-      // Skip if response already exists for this prompt+model+date
+      // Skip if response already exists for this prompt+model+date (efficiency guard).
+      // The upsert below also handles races, but this avoids re-running analysis inserts.
       const { count: existing } = await db
         .from("chat_responses")
         .select("id", { count: "exact", head: true })
@@ -499,19 +491,23 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
       const citationDomains = ["g2.com", "capterra.com", "trustradius.com", "sifthub.io", "reddit.com"];
       const rawSources = citationDomains.slice(0, 3).map((d) => ({ url: `https://${d}` }));
 
+      // Upsert on (brand_id, prompt_id, ai_model, run_date) — idempotent against races.
       const { data: savedResp, error: respErr } = await db
         .from("chat_responses")
-        .insert({
-          brand_id: brandId,
-          prompt_id: promptId,
-          ai_model: model,
-          prompt_text: promptText,
-          response_text: responseText,
-          raw_sources: rawSources,
-          tokens_used: Math.floor(Math.random() * 400) + 200,
-          status: "success",
-          run_date: runDate,
-        })
+        .upsert(
+          {
+            brand_id: brandId,
+            prompt_id: promptId,
+            ai_model: model,
+            prompt_text: promptText,
+            response_text: responseText,
+            raw_sources: rawSources,
+            tokens_used: Math.floor(Math.random() * 400) + 200,
+            status: "success",
+            run_date: runDate,
+          },
+          { onConflict: "brand_id,prompt_id,ai_model,run_date" },
+        )
         .select("id")
         .single();
 
@@ -525,22 +521,24 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
       const sentimentLabel: "positive" | "neutral" | "negative" =
         sentimentScore >= 60 ? "positive" : sentimentScore >= 40 ? "neutral" : "negative";
 
-      const { error: anaErr } = await db.from("chat_analysis").insert({
-        chat_response_id: savedResp.id as string,
-        brand_id: brandId,
-        prompt_id: promptId,
-        ai_model: model,
-        run_date: runDate,
-        brand_mentioned: mentionsSifthub,
-        brand_position: mentionsSifthub ? (sifthubMention?.position ?? 2) : null,
-        brand_sentiment: mentionsSifthub ? sentimentScore : null,
-        brand_sentiment_label: mentionsSifthub ? sentimentLabel : null,
-        brand_mention_context: mentionsSifthub
-          ? responseText.slice(0, 200)
-          : null,
-        all_brands_mentioned: allBrands,
-        sources_used: rawSources.map((s) => ({ domain: new URL(s.url).hostname })),
-      });
+      // Upsert on (chat_response_id) — one analysis per response.
+      const { error: anaErr } = await db.from("chat_analysis").upsert(
+        {
+          chat_response_id: savedResp.id as string,
+          brand_id: brandId,
+          prompt_id: promptId,
+          ai_model: model,
+          run_date: runDate,
+          brand_mentioned: mentionsSifthub,
+          brand_position: mentionsSifthub ? (sifthubMention?.position ?? 2) : null,
+          brand_sentiment: mentionsSifthub ? sentimentScore : null,
+          brand_sentiment_label: mentionsSifthub ? sentimentLabel : null,
+          brand_mention_context: mentionsSifthub ? responseText.slice(0, 200) : null,
+          all_brands_mentioned: allBrands,
+          sources_used: rawSources.map((s) => ({ domain: new URL(s.url).hostname })),
+        },
+        { onConflict: "chat_response_id", ignoreDuplicates: true },
+      );
 
       if (anaErr) {
         logger.persist(MODULE, "fail", { event: "sifthub_analysis_insert_failed", model, promptIdx: i, code: anaErr.code, msg: anaErr.message });
@@ -548,20 +546,23 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
         result.analysesSaved++;
       }
 
-      // source_appearances per response
+      // Upsert source_appearances per response on (brand_id, chat_response_id, url).
       for (const src of rawSources) {
         const domain = new URL(src.url).hostname.replace(/^www\./, "");
-        await db.from("source_appearances").insert({
-          brand_id: brandId,
-          chat_response_id: savedResp.id as string,
-          prompt_id: promptId,
-          ai_model: model,
-          domain,
-          url: src.url,
-          was_cited: true,
-          was_used: true,
-          run_date: runDate,
-        });
+        await db.from("source_appearances").upsert(
+          {
+            brand_id: brandId,
+            chat_response_id: savedResp.id as string,
+            prompt_id: promptId,
+            ai_model: model,
+            domain,
+            url: src.url,
+            was_cited: true,
+            was_used: true,
+            run_date: runDate,
+          },
+          { onConflict: "brand_id,chat_response_id,url", ignoreDuplicates: true },
+        );
       }
     }
   }
@@ -654,26 +655,22 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
     { competitor_name: "Autorfp", domain: "https://autorfp.ai",    website: "https://autorfp.ai" },
   ];
 
+  // Upsert on (brand_id, competitor_name) — idempotent.
   for (const comp of sifthubCompetitors) {
-    const { count: existingComp } = await db
-      .from("competitors")
-      .select("id", { count: "exact", head: true })
-      .eq("brand_id", brandId)
-      .eq("competitor_name", comp.competitor_name);
-
-    if ((existingComp ?? 0) === 0) {
-      const { error } = await db.from("competitors").insert({
+    const { error } = await db.from("competitors").upsert(
+      {
         brand_id: brandId,
         competitor_name: comp.competitor_name,
         domain: comp.domain,
         website: comp.website,
         is_tracked: true,
-      });
-      if (error) {
-        logger.persist(MODULE, "fail", { event: "sifthub_competitor_insert_failed", name: comp.competitor_name, code: error.code, msg: error.message });
-      } else {
-        result.competitorsSaved++;
-      }
+      },
+      { onConflict: "brand_id,competitor_name", ignoreDuplicates: true },
+    );
+    if (error) {
+      logger.persist(MODULE, "fail", { event: "sifthub_competitor_insert_failed", name: comp.competitor_name, code: error.code, msg: error.message });
+    } else {
+      result.competitorsSaved++;
     }
   }
 
@@ -777,8 +774,10 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
       },
     ];
 
-    const { error } = await db.from("ai_recommendations").insert(
+    // Upsert on (brand_id, title) — idempotent.
+    const { error } = await db.from("ai_recommendations").upsert(
       recs.map((r) => ({ brand_id: brandId, ...r, status: "open" })),
+      { onConflict: "brand_id,title", ignoreDuplicates: true },
     );
     if (error) {
       logger.persist(MODULE, "fail", { event: "sifthub_recs_insert_failed", code: error.code, msg: error.message });

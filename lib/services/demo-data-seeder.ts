@@ -219,27 +219,39 @@ export async function seedDemoDataForBrand(config: {
   const scores = hashScore(brandName);
   let responsesSaved = 0, analysesSaved = 0, metricsSaved = 0, recommendationsSaved = 0;
 
-  const { data: existingPrompts } = await supabase.from("prompts").select("id").eq("brand_id", brandId).limit(1);
-  let promptId: string;
-  if (!existingPrompts?.length) {
-    const { data: newPrompt, error } = await supabase.from("prompts").insert({ brand_id: brandId, text: `What are the best tools similar to ${brandName}?`, is_active: true }).select("id").single();
-    if (error || !newPrompt) return { seeded: false, responsesSaved: 0, analysesSaved: 0, metricsSaved: 0, recommendationsSaved: 0, message: `Prompt insert failed: ${error?.message}` };
-    promptId = newPrompt.id as string;
-  } else {
-    promptId = existingPrompts[0].id as string;
+  // Upsert prompt on (brand_id, text) — idempotent.
+  const { data: upsertedPrompt, error: promptErr } = await supabase
+    .from("prompts")
+    .upsert(
+      { brand_id: brandId, text: `What are the best tools similar to ${brandName}?`, is_active: true },
+      { onConflict: "brand_id,text" },
+    )
+    .select("id")
+    .single();
+  if (promptErr || !upsertedPrompt) {
+    return { seeded: false, responsesSaved: 0, analysesSaved: 0, metricsSaved: 0, recommendationsSaved: 0, message: `Prompt upsert failed: ${promptErr?.message}` };
   }
+  const promptId = upsertedPrompt.id as string;
 
   for (let day = 6; day >= 0; day--) {
     const runDate = daysAgo(day);
     for (const t of DEMO_AI_RESPONSES) {
       const text = t.response(brandName);
-      const { data: r, error } = await supabase.from("chat_responses").insert({ brand_id: brandId, prompt_id: promptId, ai_model: t.model, prompt_text: t.prompt, response_text: text, raw_sources: [], tokens_used: 320, status: "success", run_date: runDate }).select("id").single();
-      if (error || !r) { logger.warn(MODULE, "chat_responses insert failed", { error: error?.message }); continue; }
+      // Upsert on (brand_id, prompt_id, ai_model, run_date) — idempotent.
+      const { data: r, error } = await supabase.from("chat_responses").upsert(
+        { brand_id: brandId, prompt_id: promptId, ai_model: t.model, prompt_text: t.prompt, response_text: text, raw_sources: [], tokens_used: 320, status: "success", run_date: runDate },
+        { onConflict: "brand_id,prompt_id,ai_model,run_date" },
+      ).select("id").single();
+      if (error || !r) { logger.warn(MODULE, "chat_responses upsert failed", { error: error?.message }); continue; }
       responsesSaved++;
       const pos = scores.position + (day % 2 === 0 ? -1 : 1);
       const sent = scores.sentiment - (day % 3 === 0 ? 5 : 0);
       const lbl: "positive" | "neutral" | "negative" = sent >= 60 ? "positive" : sent >= 40 ? "neutral" : "negative";
-      const { error: ae } = await supabase.from("chat_analysis").insert({ chat_response_id: r.id as string, brand_id: brandId, prompt_id: promptId, ai_model: t.model, run_date: runDate, brand_mentioned: true, brand_position: Math.max(1, Math.round(pos)), brand_sentiment: sent, brand_sentiment_label: lbl, brand_mention_context: text.slice(0, 200), all_brands_mentioned: [{ name: brandName, position: 1, sentiment_score: sent, sentiment_label: lbl, context_snippet: text.slice(0, 120) }], sources_used: [] });
+      // Upsert on (chat_response_id) — one analysis per response.
+      const { error: ae } = await supabase.from("chat_analysis").upsert(
+        { chat_response_id: r.id as string, brand_id: brandId, prompt_id: promptId, ai_model: t.model, run_date: runDate, brand_mentioned: true, brand_position: Math.max(1, Math.round(pos)), brand_sentiment: sent, brand_sentiment_label: lbl, brand_mention_context: text.slice(0, 200), all_brands_mentioned: [{ name: brandName, position: 1, sentiment_score: sent, sentiment_label: lbl, context_snippet: text.slice(0, 120) }], sources_used: [] },
+        { onConflict: "chat_response_id", ignoreDuplicates: true },
+      );
       if (!ae) analysesSaved++;
     }
   }
@@ -253,9 +265,13 @@ export async function seedDemoDataForBrand(config: {
     }
   }
 
+  // Upsert on (brand_id, title) — idempotent.
   const { count: existingRecs } = await supabase.from("ai_recommendations").select("id", { count: "exact", head: true }).eq("brand_id", brandId);
   if ((existingRecs ?? 0) === 0) {
-    const { error } = await supabase.from("ai_recommendations").insert(GENERIC_RECOMMENDATIONS.map((r) => ({ brand_id: brandId, ...r, status: "open" })));
+    const { error } = await supabase.from("ai_recommendations").upsert(
+      GENERIC_RECOMMENDATIONS.map((r) => ({ brand_id: brandId, ...r, status: "open" })),
+      { onConflict: "brand_id,title", ignoreDuplicates: true },
+    );
     if (!error) recommendationsSaved = GENERIC_RECOMMENDATIONS.length;
   }
 
