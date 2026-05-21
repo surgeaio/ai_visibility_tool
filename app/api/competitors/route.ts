@@ -12,6 +12,7 @@ import { CompetitorsRepository } from "@/lib/repositories";
 import { metricsForCompetitor } from "@/lib/services/competitor-metrics";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
+import { ensureBrandHasDemoData } from "@/lib/services/demo-data-seeder";
 
 const competitorsRepo = new CompetitorsRepository();
 
@@ -44,6 +45,9 @@ export async function GET(req: Request) {
     if (!allowed) {
       return Response.json({ error: "Brand not found", competitors: [], requestId }, { status: 404 });
     }
+
+    // Auto-seed demo data (non-blocking — fetches brand name from DB internally)
+    await ensureBrandHasDemoData(brandId).catch(() => undefined);
 
     const { items, total } = await competitorsRepo.findMany({
       search,

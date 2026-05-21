@@ -6,6 +6,7 @@ import { getRequestId, validateBody, validateQuery } from "@/lib/api/validate";
 import { createPromptApiSchema, listPromptsQuerySchema } from "@/lib/validators";
 import { PromptsRepository } from "@/lib/repositories";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ensureBrandHasDemoData } from "@/lib/services/demo-data-seeder";
 
 const promptsRepo = new PromptsRepository();
 
@@ -38,6 +39,9 @@ export async function GET(req: Request) {
     if (!allowed) {
       return Response.json({ error: "Brand not found", prompts: [], requestId }, { status: 404 });
     }
+
+    // Auto-seed demo data (non-blocking — fetches brand name from DB internally)
+    await ensureBrandHasDemoData(brandId).catch(() => undefined);
 
     const { items, total } = await promptsRepo.findMany({
       search,

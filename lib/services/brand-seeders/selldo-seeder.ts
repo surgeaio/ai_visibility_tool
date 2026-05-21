@@ -11,8 +11,6 @@
  *   - 6 ai_recommendations
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/supabase/database.types";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 
@@ -249,7 +247,7 @@ export interface SellDoSeedResult {
 }
 
 export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedResult> {
-  const db = createAdminSupabaseClient() as unknown as SupabaseClient<Database>;
+  const db = createAdminSupabaseClient();
   const result: SellDoSeedResult = {
     seeded: false,
     promptsSaved: 0,

@@ -4,6 +4,7 @@ import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId } from "@/lib/api/validate";
 import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { ensureBrandHasDemoData } from "@/lib/services/demo-data-seeder";
 
 export async function GET(req: Request) {
   const requestId = getRequestId(req);
@@ -21,13 +22,16 @@ export async function GET(req: Request) {
   const userClient = await createServerSupabaseClient();
   const { data: brand } = await userClient
     .from("brands")
-    .select("id, name")
+    .select("id, name, domain")
     .eq("id", brandId)
     .eq("user_id", userId)
     .maybeSingle();
   if (!brand) {
     return Response.json({ error: "Brand not found", requestId }, { status: 404 });
   }
+
+  // Auto-seed demo data (non-blocking)
+  await ensureBrandHasDemoData(brandId, brand.name as string, brand.domain as string | null);
 
   const admin = tryCreateAdminSupabaseClient();
   const db = admin ?? userClient;

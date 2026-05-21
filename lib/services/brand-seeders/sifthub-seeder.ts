@@ -11,8 +11,6 @@
  *   - 5 ai_recommendations (GEO-specific)
  */
 
-import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Database } from "@/lib/supabase/database.types";
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
 
@@ -356,7 +354,7 @@ export interface SifthubSeedResult {
 }
 
 export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedResult> {
-  const db = createAdminSupabaseClient() as unknown as SupabaseClient<Database>;
+  const db = createAdminSupabaseClient();
   const result: SifthubSeedResult = {
     seeded: false,
     promptsSaved: 0,
@@ -369,7 +367,7 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
     message: "",
   };
 
-  logger.info(MODULE, "Starting SiftHub demo seed", { brandId });
+  logger.persist(MODULE, "ok", { event: "sifthub_seed_start", brandId });
 
   // ── 1. Upsert 28 prompts ──────────────────────────────────────────────────
 
@@ -405,13 +403,13 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
     result.promptsSaved++;
   }
 
-  // Count pre-existing prompts too
   const totalPrompts = promptIdMap.size;
-  logger.info(MODULE, `Prompts ready: ${totalPrompts}`, { brandId });
+  logger.persist(MODULE, "ok", { event: "sifthub_prompts_ready", count: totalPrompts, new: result.promptsSaved, brandId });
 
-  // ── 2. Insert chat_responses + chat_analysis (run date = yesterday) ───────
+  // ── 2. Insert chat_responses + chat_analysis ──────────────────────────────
+  // Use yesterday as the run_date so data always sits in the "last 7 days" range.
 
-  const runDate = exactDate(1); // May 20 equivalent
+  const runDate = exactDate(1);
 
   for (let i = 0; i < SIFTHUB_PROMPTS.length; i++) {
     const promptId = promptIdMap.get(i);
@@ -457,7 +455,7 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
         .single();
 
       if (respErr || !savedResp) {
-        logger.warn(MODULE, `chat_responses failed (${model} prompt=${i})`, { error: respErr?.message });
+        logger.persist(MODULE, "fail", { event: "sifthub_response_insert_failed", model, promptIdx: i, code: respErr?.code, msg: respErr?.message });
         continue;
       }
       result.responsesSaved++;
@@ -484,7 +482,7 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
       });
 
       if (anaErr) {
-        logger.warn(MODULE, `chat_analysis failed (${model} prompt=${i})`, { error: anaErr.message });
+        logger.persist(MODULE, "fail", { event: "sifthub_analysis_insert_failed", model, promptIdx: i, code: anaErr.code, msg: anaErr.message });
       } else {
         result.analysesSaved++;
       }
@@ -507,8 +505,11 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
     }
   }
 
-  // ── 3. Brand daily metrics (7 days, exact spec values) ───────────────────
-  // daysAgo(7) = oldest (May 14 equiv), daysAgo(1) = newest (May 20 equiv)
+  logger.persist(MODULE, "ok", { event: "sifthub_responses_done", responses: result.responsesSaved, analyses: result.analysesSaved, brandId });
+
+  // ── 3. Brand daily metrics (7 days, exact spec percentages) ──────────────
+  // Uses daysAgo(1..7): always the last 7 days relative to TODAY,
+  // so data is always within any 7-day dashboard filter range.
 
   const metricDays = [7, 6, 5, 4, 3, 2, 1]; // oldest → newest
 
@@ -573,11 +574,17 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
         },
         { onConflict: "brand_id,ai_model,metric_date" },
       );
-      if (!error) result.metricsSaved++;
+      if (error) {
+        logger.persist(MODULE, "fail", { event: "sifthub_metrics_upsert_failed", ai_model: row.ai_model, metricDate, code: error.code, msg: error.message });
+      } else {
+        result.metricsSaved++;
+      }
     }
   }
 
-  // ── 4. Competitors (5 entries) ────────────────────────────────────────────
+  logger.persist(MODULE, "ok", { event: "sifthub_metrics_done", count: result.metricsSaved, brandId });
+
+  // ── 4. Competitors (4 entries) ───────────────────────────────────────────
 
   const sifthubCompetitors = [
     { competitor_name: "1up", domain: "https://1up.ai",        website: "https://1up.ai" },
@@ -601,9 +608,15 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
         website: comp.website,
         is_tracked: true,
       });
-      if (!error) result.competitorsSaved++;
+      if (error) {
+        logger.persist(MODULE, "fail", { event: "sifthub_competitor_insert_failed", name: comp.competitor_name, code: error.code, msg: error.message });
+      } else {
+        result.competitorsSaved++;
+      }
     }
   }
+
+  logger.persist(MODULE, "ok", { event: "sifthub_competitors_done", count: result.competitorsSaved, brandId });
 
   // ── 5. Source appearances (domain-level citations) ────────────────────────
 
@@ -702,12 +715,15 @@ export async function seedSifthubDemoData(brandId: string): Promise<SifthubSeedR
     const { error } = await db.from("ai_recommendations").insert(
       recs.map((r) => ({ brand_id: brandId, ...r, status: "open" })),
     );
-    if (!error) result.recommendationsSaved = recs.length;
-    else logger.warn(MODULE, "Recommendations insert failed", { error: error.message });
+    if (error) {
+      logger.persist(MODULE, "fail", { event: "sifthub_recs_insert_failed", code: error.code, msg: error.message });
+    } else {
+      result.recommendationsSaved = recs.length;
+    }
   }
 
   result.seeded = true;
   result.message = `SiftHub demo seed complete: ${result.promptsSaved} new prompts, ${result.responsesSaved} responses, ${result.analysesSaved} analyses, ${result.metricsSaved} metrics, ${result.competitorsSaved} competitors, ${result.sourcesSaved} sources, ${result.recommendationsSaved} recommendations`;
-  logger.info(MODULE, result.message, { brandId });
+  logger.persist(MODULE, "ok", { event: "sifthub_seed_complete", ...result, brandId });
   return result;
 }
