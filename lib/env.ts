@@ -1,30 +1,91 @@
-import { z } from "zod";
+/**
+ * Centralized environment variable validator.
+ *
+ * Call `validateEnv()` at the top of long-running server processes or
+ * in a startup health-check route to surface missing configuration early.
+ *
+ * Usage:
+ *   import { validateEnv } from "@/lib/env";
+ *   const { ok, warnings, errors } = validateEnv();
+ *   if (!ok) console.error("Env validation failed:", errors);
+ */
 
-const emptyToUndefined = (value: unknown) =>
-  value === "" || value === undefined ? undefined : value;
+export interface EnvValidationResult {
+  ok: boolean;
+  errors: string[];
+  warnings: string[];
+}
 
-const envSchema = z.object({
-  REDIS_URL: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
-  UPSTASH_REDIS_URL: z.preprocess(emptyToUndefined, z.string().min(1).optional()),
-  UPSTASH_REDIS_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
-  UPSTASH_REDIS_REST_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
-  UPSTASH_REDIS_REST_TOKEN: z.preprocess(emptyToUndefined, z.string().optional()),
-  NEXT_PUBLIC_SUPABASE_URL: z.preprocess(emptyToUndefined, z.string().url().optional()),
-  NEXT_PUBLIC_SUPABASE_ANON_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
-  SUPABASE_SERVICE_ROLE_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
-  CRON_SECRET: z.preprocess(emptyToUndefined, z.string().optional()),
-  SERPER_API_KEY: z.preprocess(emptyToUndefined, z.string().optional()),
-  DEMO_MODE: z.preprocess(emptyToUndefined, z.enum(["true", "false"]).optional()),
-  NEXT_PUBLIC_DEMO_MODE: z.preprocess(emptyToUndefined, z.enum(["true", "false"]).optional()),
-  AI_DAILY_BUDGET_USD: z.preprocess(emptyToUndefined, z.coerce.number().positive().optional()),
-});
+export function validateEnv(): EnvValidationResult {
+  const errors: string[] = [];
+  const warnings: string[] = [];
 
-export type AppEnv = z.infer<typeof envSchema>;
-
-export function getEnv(): AppEnv {
-  const parsed = envSchema.safeParse(process.env);
-  if (!parsed.success) {
-    return {};
+  // ─── Required: Supabase ───────────────────────────────────────────────────
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) {
+    errors.push("NEXT_PUBLIC_SUPABASE_URL is not set");
   }
-  return parsed.data;
+  if (!process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim()) {
+    errors.push("NEXT_PUBLIC_SUPABASE_ANON_KEY is not set");
+  }
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY?.trim()) {
+    errors.push("SUPABASE_SERVICE_ROLE_KEY is not set (required for admin operations)");
+  }
+
+  // ─── Required: AI — at minimum one gateway ────────────────────────────────
+  const hasOpenRouter  = Boolean(process.env.OPENROUTER_API_KEY?.trim());
+  const hasDirectOpenAI = Boolean(process.env.OPENAI_API_KEY?.trim());
+  const hasDirectAnthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  const hasDirectGemini = Boolean(
+    process.env.GOOGLE_API_KEY?.trim() || process.env.GOOGLE_AI_API_KEY?.trim(),
+  );
+
+  if (!hasOpenRouter) {
+    if (!hasDirectOpenAI && !hasDirectAnthropic && !hasDirectGemini) {
+      errors.push(
+        "No AI gateway configured. Set OPENROUTER_API_KEY (recommended) or at least one of OPENAI_API_KEY / ANTHROPIC_API_KEY / GOOGLE_API_KEY.",
+      );
+    } else {
+      warnings.push(
+        "OPENROUTER_API_KEY is not set. Falling back to direct provider keys. " +
+        "This means some models may be unavailable. Add OPENROUTER_API_KEY for full coverage.",
+      );
+    }
+  }
+
+  // ─── Optional but recommended ─────────────────────────────────────────────
+  if (!process.env.OPENROUTER_API_KEY?.trim() && !process.env.PERPLEXITY_API_KEY?.trim()) {
+    warnings.push("PERPLEXITY_API_KEY is not set — Perplexity model will be skipped.");
+  }
+
+  if (!process.env.ENCRYPTION_KEY?.trim()) {
+    warnings.push("ENCRYPTION_KEY is not set — per-user API key encryption is disabled.");
+  }
+
+  if (!process.env.CRON_SECRET?.trim()) {
+    warnings.push("CRON_SECRET is not set — cron jobs will not be protected.");
+  }
+
+  if (!process.env.NEXT_PUBLIC_APP_URL?.trim() && !process.env.APP_URL?.trim()) {
+    warnings.push("NEXT_PUBLIC_APP_URL is not set — OpenRouter HTTP-Referer header will default to localhost:3000.");
+  }
+
+  return {
+    ok: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
+/** Log validation result to the console at startup. */
+export function logEnvValidation(): void {
+  const { ok, errors, warnings } = validateEnv();
+  if (!ok) {
+    console.error("[env] ❌ Environment validation FAILED:");
+    errors.forEach((e) => console.error("  ✗", e));
+  } else {
+    console.log("[env] ✅ Required environment variables present.");
+  }
+  if (warnings.length) {
+    warnings.forEach((w) => console.warn("[env] ⚠", w));
+  }
 }

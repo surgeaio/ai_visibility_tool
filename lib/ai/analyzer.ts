@@ -1,62 +1,41 @@
 import type { AIModelKey, AnalysisResult, SentimentResult } from "./types";
 import { analyzeSentiment } from "./sentiment";
 import { detectPatterns } from "./recommendations";
-import { hasAnthropic, hasOpenAI, isDemoMode } from "@/lib/config";
-import { createOpenRouterClient, hasOpenRouter } from "@/lib/ai/openrouter-client";
+import { isDemoMode } from "@/lib/config";
+import { createOpenRouterClient } from "@/lib/ai/openrouter-client";
 import { AI_MODELS } from "@/lib/ai/models";
 
 export type { AIModelKey } from "./types";
 
+/**
+ * Query an AI model exclusively through OpenRouter.
+ * Returns empty string when no key is configured so callers can fall
+ * through to demo mode gracefully instead of crashing.
+ */
 async function queryAIModel(model: AIModelKey, prompt: string): Promise<string> {
-  if (model === "openai" && hasOpenAI()) {
-    if (hasOpenRouter()) {
-      const client = createOpenRouterClient();
-      if (client) {
-        const res = await client.chat.completions.create({
-          model: AI_MODELS.openai,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.4,
-          max_tokens: 1200,
-        });
-        return res.choices[0]?.message?.content ?? "";
-      }
-    }
-    const OpenAI = (await import("openai")).default;
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const res = await openai.chat.completions.create({
-      model: "gpt-4o",
+  const client = createOpenRouterClient(null, 45_000);
+  if (!client) {
+    // No OPENROUTER_API_KEY — caller should use demo/fallback path
+    return "";
+  }
+
+  try {
+    const openrouterModel =
+      model === "openai" ? AI_MODELS.openai
+      : model === "anthropic" ? AI_MODELS.claude
+      : AI_MODELS.gemini;
+
+    const res = await client.chat.completions.create({
+      model: openrouterModel,
       messages: [{ role: "user", content: prompt }],
       temperature: 0.4,
       max_tokens: 1200,
     });
     return res.choices[0]?.message?.content ?? "";
+  } catch (err) {
+    console.error(`[analyzer] queryAIModel(${model}) failed:`, err instanceof Error ? err.message : err);
+    return "";
   }
-  if (model === "anthropic" && hasAnthropic()) {
-    if (hasOpenRouter()) {
-      const client = createOpenRouterClient();
-      if (client) {
-        const res = await client.chat.completions.create({
-          model: AI_MODELS.claude,
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.4,
-          max_tokens: 1200,
-        });
-        return res.choices[0]?.message?.content ?? "";
-      }
-    }
-    const Anthropic = (await import("@anthropic-ai/sdk")).default;
-    const anthropic = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
-    const res = await anthropic.messages.create({
-      model: "claude-3-5-sonnet-20241022",
-      max_tokens: 1200,
-      messages: [{ role: "user", content: prompt }],
-    });
-    const block = res.content.find((b) => b.type === "text");
-    return block && block.type === "text" ? block.text : "";
-  }
-
-  // No silent synthetic narrative: use `analyzePromptOrDemo` / demo APIs when keys are absent.
-  return "";
 }
 
 export function detectBrandMentions(

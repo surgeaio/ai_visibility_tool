@@ -2,14 +2,7 @@ export const dynamic = "force-dynamic";
 
 import { NextResponse } from "next/server";
 import { adminHasLlmProviders } from "@/lib/ai/admin-providers";
-
-function checkEnv(): boolean {
-  return Boolean(
-    process.env.NEXT_PUBLIC_SUPABASE_URL?.trim() &&
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim() &&
-      process.env.SUPABASE_SERVICE_ROLE_KEY?.trim(),
-  );
-}
+import { validateEnv } from "@/lib/env";
 
 async function checkSupabase(): Promise<boolean> {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
@@ -27,35 +20,41 @@ async function checkSupabase(): Promise<boolean> {
 }
 
 export async function GET() {
-  const envOk = checkEnv();
+  const envCheck = validateEnv();
   const supabaseOk = await checkSupabase();
 
   const openRouter = Boolean(process.env.OPENROUTER_API_KEY?.trim());
   const providers = {
     openrouter: openRouter,
-    openai: openRouter || Boolean(process.env.OPENAI_API_KEY?.trim()),
-    anthropic: openRouter || Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
-    google: openRouter || Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
+    openai:     openRouter || Boolean(process.env.OPENAI_API_KEY?.trim()),
+    anthropic:  openRouter || Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+    google:     openRouter || Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
     perplexity: Boolean(process.env.PERPLEXITY_API_KEY?.trim()),
-    serper: Boolean(process.env.SERPER_API_KEY?.trim()),
+    serper:     Boolean(process.env.SERPER_API_KEY?.trim()),
   };
 
   const canRunPrompts = adminHasLlmProviders();
-  const executionMode = "sync";
 
   const checks = {
-    env: envOk,
-    supabase: supabaseOk,
-    execution_mode: executionMode,
+    env:            envCheck.ok,
+    supabase:       supabaseOk,
+    execution_mode: "sync" as const,
     providers,
     can_run_prompts: canRunPrompts,
   };
 
-  const status = envOk && supabaseOk && canRunPrompts ? "ok" : "degraded";
+  const status: "ok" | "degraded" | "error" =
+    !envCheck.ok || !supabaseOk
+      ? "error"
+      : !canRunPrompts
+        ? "degraded"
+        : "ok";
 
   return NextResponse.json({
     status,
     checks,
+    envErrors:   envCheck.errors.length   ? envCheck.errors   : undefined,
+    envWarnings: envCheck.warnings.length ? envCheck.warnings : undefined,
     timestamp: new Date().toISOString(),
   });
 }

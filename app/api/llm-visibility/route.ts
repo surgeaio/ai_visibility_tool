@@ -10,6 +10,7 @@ import { buildLlmVisibilityDashboard } from "@/lib/services/llm-visibility-dashb
 import { loadRecentModelErrors, loadVisibilityPerfRows } from "@/lib/services/llm-visibility-data";
 import { ensureLlmPlatformsSeeded } from "@/lib/services/llm-platforms-seed";
 import { ALL_AVAILABLE_MODELS } from "@/lib/ai/models";
+import { ensureBrandHasDemoData } from "@/lib/services/demo-data-seeder";
 
 function parseCsv(value: string | undefined): string[] {
   if (!value?.trim()) return [];
@@ -53,6 +54,12 @@ export async function GET(req: Request) {
     const ownedIds = new Set(availableBrands.map((b) => b.id));
     if (!ownedIds.has(brandId)) {
       return Response.json({ error: "Brand not found", requestId }, { status: 404 });
+    }
+
+    // Auto-seed demo data if the brand has no data yet (non-blocking, best-effort)
+    const currentBrand = availableBrands.find((b) => b.id === brandId);
+    if (currentBrand) {
+      await ensureBrandHasDemoData(brandId, currentBrand.name);
     }
 
     const requestedIds = parseCsv(brandIdsParam);

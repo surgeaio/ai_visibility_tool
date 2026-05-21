@@ -11,6 +11,7 @@ import {
   getLiveDashboardOverview,
   type DashboardRange,
 } from "@/lib/services/dashboard-overview";
+import { ensureBrandHasDemoData } from "@/lib/services/demo-data-seeder";
 
 export async function GET(req: Request) {
   const requestId = getRequestId(req);
@@ -33,6 +34,10 @@ export async function GET(req: Request) {
     if (!brand) {
       return Response.json({ error: "Brand not found", requestId }, { status: 404 });
     }
+
+    // Auto-seed demo data if brand has no analytics yet (non-blocking)
+    await ensureBrandHasDemoData(brandId, brand.name, brand.domain ?? null);
+
     const payload = await getLiveDashboardOverview(supabase, brandId, brand.name, range as DashboardRange);
     return Response.json({ ...payload, requestId });
   } catch (e) {
