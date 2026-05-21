@@ -4,7 +4,7 @@ import { serverErrorResponse } from "@/lib/api/errors";
 import { getRequestId, validateQuery } from "@/lib/api/validate";
 import { listCitationsQuerySchema } from "@/lib/validators";
 import { CitationsRepository } from "@/lib/repositories";
-import { ensureBrandHasDemoData } from "@/lib/services/demo-data-seeder";
+import { ensureCitationsExist } from "@/lib/services/demo-data-seeder";
 
 const citationsRepo = new CitationsRepository();
 
@@ -15,9 +15,10 @@ export async function GET(req: Request) {
 
   const { limit, offset, brandId } = queryValidation.data;
 
-  // Auto-seed demo data when brand has no citations yet (non-blocking)
+  // Auto-seed citations if missing — checks citations count independently of
+  // chat_responses so brands seeded before the citations step still get data.
   if (brandId) {
-    await ensureBrandHasDemoData(brandId).catch(() => undefined);
+    await ensureCitationsExist(brandId).catch(() => undefined);
   }
 
   try {

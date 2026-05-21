@@ -16,8 +16,8 @@
 
 import { createAdminSupabaseClient } from "@/lib/supabase/admin";
 import { logger } from "@/lib/logger";
-import { seedSifthubDemoData } from "@/lib/services/brand-seeders/sifthub-seeder";
-import { seedSellDoDemoData } from "@/lib/services/brand-seeders/selldo-seeder";
+import { seedSifthubDemoData, seedSifthubCitations } from "@/lib/services/brand-seeders/sifthub-seeder";
+import { seedSellDoDemoData, seedSellDoCitations } from "@/lib/services/brand-seeders/selldo-seeder";
 
 const MODULE = "demo-data-seeder";
 
@@ -262,6 +262,63 @@ export async function seedDemoDataForBrand(config: {
   const msg = `Generic demo seed complete: ${responsesSaved} responses, ${analysesSaved} analyses, ${metricsSaved} metrics, ${recommendationsSaved} recommendations`;
   logger.info(MODULE, msg, { brandId });
   return { seeded: true, responsesSaved, analysesSaved, metricsSaved, recommendationsSaved, message: msg };
+}
+
+// ─── Citations-specific auto-heal ────────────────────────────────────────────
+
+/**
+ * Ensure the citations table is populated for a brand.
+ *
+ * Unlike ensureBrandHasDemoData(), this function checks citations count
+ * INDEPENDENTLY of chat_responses. It fixes the case where a brand was seeded
+ * with an older seeder version (before citations step was added) and therefore
+ * has chat_responses but 0 citations.
+ *
+ * Called by /api/citations so the Citations dashboard page auto-populates.
+ * Non-blocking — never throws.
+ */
+export async function ensureCitationsExist(brandId: string): Promise<void> {
+  try {
+    const supabase = createAdminSupabaseClient();
+
+    // Exit early if citations already present
+    const { count } = await supabase
+      .from("citations")
+      .select("id", { count: "exact", head: true })
+      .eq("brand_id", brandId);
+
+    if ((count ?? 0) > 0) return;
+
+    // Fetch brand to determine which seeder to run
+    const { data: brand } = await supabase
+      .from("brands")
+      .select("name, domain")
+      .eq("id", brandId)
+      .maybeSingle();
+
+    if (!brand) return;
+
+    const brandHaystack: BrandHaystack = {
+      name: brand.name as string | null,
+      domain: brand.domain as string | null,
+    };
+
+    if (isSifthubBrand(brandHaystack)) {
+      const inserted = await seedSifthubCitations(brandId);
+      logger.info(MODULE, `ensureCitationsExist: sifthub citations inserted`, { brandId, inserted });
+    } else if (isSellDoBrand(brandHaystack)) {
+      const inserted = await seedSellDoCitations(brandId);
+      logger.info(MODULE, `ensureCitationsExist: selldo citations inserted`, { brandId, inserted });
+    } else {
+      // Generic brand: fall back to full demo data seeder (handles all tables)
+      await ensureBrandHasDemoData(brandId);
+    }
+  } catch (err) {
+    logger.warn(MODULE, "ensureCitationsExist failed (non-fatal)", {
+      brandId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 // ─── Auto-heal entry point ────────────────────────────────────────────────
