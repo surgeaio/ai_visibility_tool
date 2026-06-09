@@ -1,4 +1,4 @@
-import type { Citation, ProviderName } from "@/lib/ai/types";
+import type { Citation } from "@/lib/ai/types";
 
 const urlRegex = /https?:\/\/[^\s)\]]+/gi;
 
@@ -21,10 +21,6 @@ export function extractCitationsFromText(text: string): Citation[] {
   }));
 }
 
-export function extractCitations(
-  provider: ProviderName,
-  responseText: string,
-  providedCitations: Citation[],
-): Citation[] {
+export function extractCitations(responseText: string): Citation[] {
   return extractCitationsFromText(responseText);
 }
