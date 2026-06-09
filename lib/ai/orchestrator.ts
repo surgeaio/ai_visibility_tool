@@ -13,7 +13,6 @@ const DEFAULT_PROVIDER_ORDER: ProviderName[] = [
   "openai",
   "gemini",
   "anthropic",
-  "perplexity",
 ];
 
 async function executeWithRetry(

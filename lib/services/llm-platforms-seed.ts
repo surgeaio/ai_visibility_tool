@@ -5,7 +5,6 @@ const PLATFORM_DISPLAY: Record<string, string> = {
   chatgpt:    "ChatGPT",
   claude:     "Claude",
   gemini:     "Gemini",
-  perplexity: "Perplexity",
 };
 
 /** Ensure llm_platforms rows exist (idempotent). */

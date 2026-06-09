@@ -53,10 +53,6 @@ export function validateEnv(): EnvValidationResult {
   }
 
   // ─── Optional but recommended ─────────────────────────────────────────────
-  if (!process.env.OPENROUTER_API_KEY?.trim() && !process.env.PERPLEXITY_API_KEY?.trim()) {
-    warnings.push("PERPLEXITY_API_KEY is not set — Perplexity model will be skipped.");
-  }
-
   if (!process.env.ENCRYPTION_KEY?.trim()) {
     warnings.push("ENCRYPTION_KEY is not set — per-user API key encryption is disabled.");
   }

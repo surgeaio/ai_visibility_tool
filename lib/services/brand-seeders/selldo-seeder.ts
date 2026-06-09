@@ -3,7 +3,7 @@
  *
  * Populates EXACT reference data for sell.do:
  *   - 15 tracked prompts (real-estate CRM domain)
- *   - 60 chat_responses (15 × 4 models: chatgpt, claude, gemini, perplexity)
+ *   - 45 chat_responses (15 × 3 models: chatgpt, claude, gemini)
  *   - 60 chat_analysis rows with competitor mention data
  *   - 30-day brand_daily_metrics
  *   - 3 competitors (HubSpot, Zoho, Freshworks)
@@ -36,7 +36,7 @@ export const SELLDO_PROMPTS = [
   "top crm for housing developers",
 ] as const;
 
-const MODELS = ["chatgpt", "claude", "gemini", "perplexity"] as const;
+const MODELS = ["chatgpt", "claude", "gemini"] as const;
 type SelldoModel = typeof MODELS[number];
 
 // ─── Per-model visibility for sell.do ────────────────────────────────────────
@@ -45,14 +45,12 @@ const MODEL_VIS: Record<SelldoModel, number> = {
   chatgpt: 8,
   claude: 6,
   gemini: 14,
-  perplexity: 22,
 };
 
 // Sell.do mentioned: ~1/15 for chatgpt, ~1/15 for claude, ~2/15 for gemini, ~3/15 for perplexity
 const SELLDO_MENTIONED_CHATGPT = new Set([0, 9]); // "best real estate crm", "best crm for indian real estate"
 const SELLDO_MENTIONED_CLAUDE = new Set([8]); // "sell.do review"
 const SELLDO_MENTIONED_GEMINI = new Set([0, 5, 8, 9, 14]); // 5 prompts → 5/15 = 33% (normalized to ~14% avg)
-const SELLDO_MENTIONED_PERPLEXITY = new Set([0, 2, 5, 8, 9, 12, 14]); // 7 prompts → 46.67% → 22% avg after weighting
 
 // ─── Competitor mention sets ─────────────────────────────────────────────────
 // hubspot: 42%, zoho: 28%, freshworks: 19% (avg across all models)
@@ -97,7 +95,6 @@ function generateSelldoResponse(promptText: string, model: SelldoModel, promptId
       case "chatgpt": return SELLDO_MENTIONED_CHATGPT.has(promptIdx);
       case "claude": return SELLDO_MENTIONED_CLAUDE.has(promptIdx);
       case "gemini": return SELLDO_MENTIONED_GEMINI.has(promptIdx);
-      case "perplexity": return SELLDO_MENTIONED_PERPLEXITY.has(promptIdx);
     }
   })();
   const mentionsHubspot = HUBSPOT_MENTIONED.has(promptIdx);
@@ -214,7 +211,6 @@ function buildSelldoAllBrandsMentioned(promptIdx: number, model: SelldoModel): C
       case "chatgpt": return SELLDO_MENTIONED_CHATGPT.has(promptIdx);
       case "claude": return SELLDO_MENTIONED_CLAUDE.has(promptIdx);
       case "gemini": return SELLDO_MENTIONED_GEMINI.has(promptIdx);
-      case "perplexity": return SELLDO_MENTIONED_PERPLEXITY.has(promptIdx);
     }
   })();
 
@@ -377,7 +373,6 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
           case "chatgpt": return SELLDO_MENTIONED_CHATGPT.has(i);
           case "claude": return SELLDO_MENTIONED_CLAUDE.has(i);
           case "gemini": return SELLDO_MENTIONED_GEMINI.has(i);
-          case "perplexity": return SELLDO_MENTIONED_PERPLEXITY.has(i);
         }
       })();
       const allBrands = buildSelldoAllBrandsMentioned(i, model);
@@ -481,7 +476,6 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
       { ai_model: "chatgpt", vis: MODEL_VIS.chatgpt, pos: 4.0, sent: 68, total: 15, mentions: Math.round(MODEL_VIS.chatgpt / 100 * 15) },
       { ai_model: "claude", vis: MODEL_VIS.claude, pos: 4.5, sent: 65, total: 15, mentions: Math.round(MODEL_VIS.claude / 100 * 15) },
       { ai_model: "gemini", vis: MODEL_VIS.gemini, pos: 3.0, sent: 73, total: 15, mentions: Math.round(MODEL_VIS.gemini / 100 * 15) },
-      { ai_model: "perplexity", vis: MODEL_VIS.perplexity, pos: 2.5, sent: 74, total: 15, mentions: Math.round(MODEL_VIS.perplexity / 100 * 15) },
     ];
 
     for (const row of metricRows) {

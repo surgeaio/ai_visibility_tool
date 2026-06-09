@@ -1,5 +1,5 @@
 export type AIModelKey = "openai" | "anthropic";
-export type ProviderName = "openai" | "anthropic" | "gemini" | "perplexity";
+export type ProviderName = "openai" | "anthropic" | "gemini";
 
 export interface Citation {
   url: string;

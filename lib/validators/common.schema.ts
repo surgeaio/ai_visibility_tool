@@ -17,7 +17,7 @@ export const dateRangeSchema = z.object({
   to: isoDateSchema.optional(),
 });
 
-export const aiModelSchema = z.enum(["openai", "anthropic", "gemini", "perplexity"]);
+export const aiModelSchema = z.enum(["openai", "anthropic", "gemini"]);
 
 export const countryCodeSchema = z
   .string()

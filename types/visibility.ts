@@ -1,4 +1,4 @@
-export type AIModel = "chatgpt" | "claude" | "gemini" | "perplexity";
+export type AIModel = "chatgpt" | "claude" | "gemini";
 
 export type DailyMetric = {
   brand_id: string;

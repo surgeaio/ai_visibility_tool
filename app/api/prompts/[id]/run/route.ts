@@ -7,9 +7,10 @@ import { adminHasLlmProviders } from "@/lib/ai/admin-providers";
 import { promptIdParamSchema } from "@/lib/validators";
 import { rateLimit } from "@/lib/rate-limit";
 import { PromptsRepository } from "@/lib/repositories";
-import { executePromptExecutionJob } from "@/lib/services/llm-tracker";
+import { runSinglePrompt } from "@/lib/services/visibility-orchestrator";
+import { createServerSupabaseClient } from "@/lib/supabase/server";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const promptsRepo = new PromptsRepository();
 
@@ -49,14 +50,33 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
 
     const brandId = prompt.brandId;
-    const jobPayload = { promptId, userId, brandId, requestId };
+    const supabase = await createServerSupabaseClient();
+    const { data: owned } = await supabase
+      .from("brands")
+      .select("id")
+      .eq("id", brandId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (!owned) {
+      return Response.json({ error: "Brand not found or access denied", requestId }, { status: 404 });
+    }
 
     try {
-      const { results, errors } = await executePromptExecutionJob(jobPayload);
+      const run = await runSinglePrompt({
+        brandId,
+        promptId,
+        triggeredBy: "manual",
+        userId,
+      });
+
+      const errors = (run.modelErrors ?? []).map((e) => e.error);
       return Response.json({
         status: "completed" as const,
         mode: "sync" as const,
-        resultsCount: results.length,
+        resultsCount: run.results.length,
+        saveStats: run.saveStats,
+        modelErrors: run.modelErrors,
         errors,
         requestId,
       });
@@ -75,6 +95,6 @@ export async function POST(req: Request, { params }: { params: { id: string } })
     }
   } catch (error) {
     console.error("[prompt-run]", error);
-    return serverErrorResponse("Failed to enqueue prompt run", requestId);
+    return serverErrorResponse("Failed to run prompt", requestId);
   }
 }

@@ -8,10 +8,10 @@ import type { ApiKeyProvider } from "@/lib/validators/api-keys.schema";
 
 type LlmKeyProvider = Extract<
   ApiKeyProvider,
-  "openai" | "anthropic" | "gemini" | "perplexity"
+  "openai" | "anthropic" | "gemini"
 >;
 
-const LLM_KEY_PROVIDERS: readonly LlmKeyProvider[] = ["openai", "anthropic", "gemini", "perplexity"];
+const LLM_KEY_PROVIDERS: readonly LlmKeyProvider[] = ["openai", "anthropic", "gemini"];
 
 function isLlmKeyProvider(p: ApiKeyProvider): p is LlmKeyProvider {
   return (LLM_KEY_PROVIDERS as readonly string[]).includes(p);

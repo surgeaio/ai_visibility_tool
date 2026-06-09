@@ -26,7 +26,6 @@ const PROVIDERS: { value: ApiKeyProvider; label: string; help: string }[] = [
   { value: "openai", label: "ChatGPT (OpenAI)", help: "https://platform.openai.com/api-keys" },
   { value: "anthropic", label: "Claude (Anthropic)", help: "https://console.anthropic.com/" },
   { value: "gemini", label: "Gemini (Google AI)", help: "https://aistudio.google.com/apikey" },
-  { value: "perplexity", label: "Perplexity", help: "https://docs.perplexity.ai/guides/getting-started" },
   { value: "google_search_console", label: "Google Search Console", help: "OAuth flow coming soon" },
   { value: "google_analytics", label: "Google Analytics", help: "OAuth flow coming soon" },
 ];

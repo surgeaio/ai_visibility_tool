@@ -7,7 +7,7 @@ import {
 } from "@/lib/demo/seed-data";
 
 export type DateRange = "7d" | "30d" | "90d";
-export type ModelFilter = "all" | "chatgpt" | "gemini" | "claude" | "perplexity";
+export type ModelFilter = "all" | "chatgpt" | "gemini" | "claude";
 
 export type DashboardPromptRow = {
   id: string;

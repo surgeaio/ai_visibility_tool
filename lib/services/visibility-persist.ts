@@ -12,10 +12,9 @@ import type { LlmKeyProviderName } from "@/lib/ai/llm-provider-factory";
 import { resolvePlatformIdForProvider } from "@/lib/services/llm-platforms-seed";
 
 const MODEL_TO_PROVIDER: Record<AIModelName, LlmKeyProviderName> = {
-  chatgpt:    "openai",
-  claude:     "anthropic",
-  gemini:     "gemini",
-  perplexity: "perplexity",
+  chatgpt: "openai",
+  claude:  "anthropic",
+  gemini:  "gemini",
 };
 
 export type ModelSaveStats = {

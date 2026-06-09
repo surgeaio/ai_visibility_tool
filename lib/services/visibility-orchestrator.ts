@@ -19,10 +19,9 @@ import {
 } from "@/lib/services/visibility-persist";
 
 const MODEL_TO_PROVIDER: Record<AIModelName, LlmKeyProviderName> = {
-  chatgpt:    "openai",
-  claude:     "anthropic",
-  gemini:     "gemini",
-  perplexity: "perplexity",
+  chatgpt: "openai",
+  claude:  "anthropic",
+  gemini:  "gemini",
 };
 
 function requireAdmin() {
@@ -89,7 +88,7 @@ export async function refreshDailyMetrics(brandId: string, date: string) {
 
   if (!analyses?.length) return;
 
-  const models = ["all", "chatgpt", "claude", "gemini", "perplexity"] as const;
+  const models = ["all", "chatgpt", "claude", "gemini"] as const;
 
   for (const model of models) {
     const rows =

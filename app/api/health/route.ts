@@ -29,7 +29,6 @@ export async function GET() {
     openai:     openRouter || Boolean(process.env.OPENAI_API_KEY?.trim()),
     anthropic:  openRouter || Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
     google:     openRouter || Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
-    perplexity: Boolean(process.env.PERPLEXITY_API_KEY?.trim()),
     serper:     Boolean(process.env.SERPER_API_KEY?.trim()),
   };
 

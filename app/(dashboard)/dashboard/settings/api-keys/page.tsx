@@ -24,8 +24,7 @@ export default function ApiKeysPage() {
             Admins: set{" "}
             <code className="rounded bg-[#0a0a0a] px-1.5 py-0.5 text-xs">OPENAI_API_KEY</code>,{" "}
             <code className="rounded bg-[#0a0a0a] px-1.5 py-0.5 text-xs">ANTHROPIC_API_KEY</code>,{" "}
-            <code className="rounded bg-[#0a0a0a] px-1.5 py-0.5 text-xs">GOOGLE_AI_API_KEY</code>, and
-            optionally <code className="rounded bg-[#0a0a0a] px-1.5 py-0.5 text-xs">PERPLEXITY_API_KEY</code>{" "}
+            <code className="rounded bg-[#0a0a0a] px-1.5 py-0.5 text-xs">GOOGLE_AI_API_KEY</code>{" "}
             in Vercel and Railway.
           </p>
         </CardContent>

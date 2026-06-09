@@ -4,7 +4,6 @@ export const apiKeyProviderSchema = z.enum([
   "openai",
   "anthropic",
   "gemini",
-  "perplexity",
   "google_search_console",
   "google_analytics",
 ]);

@@ -31,7 +31,7 @@ export default function LLMVisibilityPage() {
 
   const [dateRange, setDateRange] = useState("7d");
   const [selectedBrandIds, setSelectedBrandIds] = useState<string[]>([]);
-  const [selectedModels, setSelectedModels] = useState<string[]>(["chatgpt", "claude", "gemini", "perplexity"]);
+  const [selectedModels, setSelectedModels] = useState<string[]>(["chatgpt", "claude", "gemini"]);
   const [selectedPrompts, setSelectedPrompts] = useState<string[]>([]);
   const [focusPromptId, setFocusPromptId] = useState<string | null>(null);
 
@@ -46,7 +46,7 @@ export default function LLMVisibilityPage() {
 
   const filterRef = useRef({
     selectedBrandIds: [] as string[],
-    selectedModels: ["chatgpt", "claude", "gemini", "perplexity"] as string[],
+    selectedModels: ["chatgpt", "claude", "gemini"] as string[],
     selectedPrompts: [] as string[],
     focusPromptId: null as string | null,
   });
@@ -61,7 +61,7 @@ export default function LLMVisibilityPage() {
   useEffect(() => {
     if (!selectedBrandId) return;
     setSelectedBrandIds([selectedBrandId]);
-    setSelectedModels(["chatgpt", "claude", "gemini", "perplexity"]);
+    setSelectedModels(["chatgpt", "claude", "gemini"]);
     setSelectedPrompts([]);
     setFocusPromptId(null);
   }, [selectedBrandId]);
@@ -143,7 +143,7 @@ export default function LLMVisibilityPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           brandId: selectedBrandId,
-          models: selectedModels.length > 0 ? selectedModels : ["chatgpt", "claude", "gemini", "perplexity"],
+          models: selectedModels.length > 0 ? selectedModels : ["chatgpt", "claude", "gemini"],
         }),
       });
       const json = (await res.json()) as {

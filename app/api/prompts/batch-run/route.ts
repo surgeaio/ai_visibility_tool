@@ -5,11 +5,11 @@ import { adminHasLlmProviders } from "@/lib/ai/admin-providers";
 import { getAuthedUserId } from "@/lib/api/session";
 import { getRequestId, validateBody } from "@/lib/api/validate";
 import { PromptsRepository } from "@/lib/repositories";
-import { executePromptExecutionJob } from "@/lib/services/llm-tracker";
+import { runSinglePrompt } from "@/lib/services/visibility-orchestrator";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { uuidSchema } from "@/lib/validators/common.schema";
 
-export const maxDuration = 60;
+export const maxDuration = 300;
 
 const batchRunSchema = z.object({
   prompts: z.array(z.string().trim().min(5).max(500)).min(1).max(10),
@@ -65,14 +65,12 @@ export async function POST(req: Request) {
   for (const text of prompts) {
     try {
       const created = await promptsRepo.create({ text, category, brandId, userId });
-      const jobPayload = {
+      await runSinglePrompt({
+        brandId,
         promptId: created.id,
+        triggeredBy: "manual",
         userId,
-        brandId: created.brandId,
-        requestId,
-      };
-
-      await executePromptExecutionJob(jobPayload);
+      });
       results.push({ promptText: text, promptId: created.id, status: "completed" });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);

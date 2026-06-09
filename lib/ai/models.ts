@@ -8,7 +8,7 @@
  *   OPENROUTER_API_KEY  → powers ChatGPT, Claude, Gemini via one key
  *
  * Optional direct-provider fallbacks (used only when OPENROUTER_API_KEY is absent):
- *   OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY, PERPLEXITY_API_KEY
+ *   OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY
  */
 
 // ---------------------------------------------------------------------------
@@ -17,8 +17,7 @@
 export const PRODUCTION_MODELS = {
   chatgpt:    "gpt-4o-mini",
   claude:     "claude-haiku-4-5",
-  gemini:     "gemini-1.5-flash",
-  perplexity: "sonar",
+  gemini:     "gemini-2.5-flash",
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -28,7 +27,7 @@ export const PRODUCTION_MODELS = {
 export const AI_MODELS = {
   openai:  "openai/gpt-4o-mini",
   claude:  "anthropic/claude-sonnet-4",
-  gemini:  "google/gemini-2.5-flash-preview",
+  gemini:  "google/gemini-2.5-flash",
 } as const;
 
 export type OpenRouterModelKey = keyof typeof AI_MODELS;
@@ -40,7 +39,6 @@ export const VISIBILITY_MODELS: Record<string, string> = {
   chatgpt:    AI_MODELS.openai,
   claude:     AI_MODELS.claude,
   gemini:     AI_MODELS.gemini,
-  perplexity: PRODUCTION_MODELS.perplexity,
 };
 
 /** Models run by default during a visibility check. */
@@ -48,7 +46,6 @@ export const DEFAULT_VISIBILITY_MODELS = [
   "chatgpt",
   "claude",
   "gemini",
-  "perplexity",
 ] as const;
 
 /** Human-readable display names for the dashboard. */
@@ -56,7 +53,6 @@ export const MODEL_DISPLAY_NAMES: Record<string, string> = {
   chatgpt:    "ChatGPT",
   claude:     "Claude",
   gemini:     "Gemini",
-  perplexity: "Perplexity",
 };
 
 /** All models available for the UI dropdown. */
@@ -64,7 +60,6 @@ export const ALL_AVAILABLE_MODELS: Array<{ slug: string; label: string }> = [
   { slug: "chatgpt",    label: "ChatGPT"    },
   { slug: "claude",     label: "Claude"     },
   { slug: "gemini",     label: "Gemini"     },
-  { slug: "perplexity", label: "Perplexity" },
 ];
 
 /** Map provider slugs → OpenRouter model IDs. */

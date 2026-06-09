@@ -16,7 +16,6 @@ export function getAdminLlmProviders(): AdminLlmProvider[] {
   const openai = process.env.OPENAI_API_KEY?.trim();
   const anthropic = process.env.ANTHROPIC_API_KEY?.trim();
   const gemini = process.env.GOOGLE_AI_API_KEY?.trim();
-  const perplexity = process.env.PERPLEXITY_API_KEY?.trim();
 
   if (openrouter) {
     out.push({ provider: "openai", apiKey: openrouter });
@@ -27,7 +26,6 @@ export function getAdminLlmProviders(): AdminLlmProvider[] {
     if (anthropic) out.push({ provider: "anthropic", apiKey: anthropic });
     if (gemini) out.push({ provider: "gemini", apiKey: gemini });
   }
-  if (perplexity) out.push({ provider: "perplexity", apiKey: perplexity });
   return out;
 }
 

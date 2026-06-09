@@ -45,25 +45,6 @@ export async function testUserApiKey(provider: ApiKeyProvider, secret: string): 
         }
         return { ok: true, message: "Connected to Gemini" };
       }
-      case "perplexity": {
-        const res = await fetch("https://api.perplexity.ai/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${trimmed}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "sonar",
-            messages: [{ role: "user", content: "ping" }],
-            max_tokens: 1,
-          }),
-          signal: AbortSignal.timeout(25_000),
-        });
-        if (!res.ok) {
-          return { ok: false, message: `Perplexity returned ${res.status}` };
-        }
-        return { ok: true, message: "Connected to Perplexity" };
-      }
       case "google_search_console":
       case "google_analytics":
         return {
@@ -71,6 +52,8 @@ export async function testUserApiKey(provider: ApiKeyProvider, secret: string): 
           message:
             "Google Search Console and Analytics need OAuth. Use the upcoming Google connect flow; storing a JSON service account here will be supported next.",
         };
+      default:
+        return { ok: false, message: "Unknown provider" };
     }
   } catch (error) {
     const msg = error instanceof Error ? error.message : "Network error";

@@ -240,7 +240,7 @@ function DashboardTopBarCompact() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="end">
-          {(["all", "chatgpt", "gemini", "claude", "perplexity"] as const).map((m) => (
+          {(["all", "chatgpt", "gemini", "claude"] as const).map((m) => (
             <DropdownMenuItem key={m} className="capitalize" onClick={() => setModelFilter(m)}>
               {m === "all" ? "All models" : m}
             </DropdownMenuItem>

@@ -12,10 +12,9 @@ const PROVIDER_ENV: Record<LlmKeyProviderName, () => boolean> = {
   openai: hasOpenAI,
   anthropic: hasAnthropic,
   gemini: () => hasOpenRouterEnv() || Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
-  perplexity: () => Boolean(process.env.PERPLEXITY_API_KEY?.trim()),
 };
 
-const ALL_PROVIDERS: LlmKeyProviderName[] = ["openai", "anthropic", "gemini", "perplexity"];
+const ALL_PROVIDERS: LlmKeyProviderName[] = ["openai", "anthropic", "gemini"];
 
 function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");

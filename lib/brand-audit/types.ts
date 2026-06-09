@@ -62,7 +62,7 @@ export type LlmSentiment = "positive" | "neutral" | "negative" | "not_mentioned"
 export interface LlmVisibilityQueryResult {
   brandName: string;
   brandUrl: string;
-  llmProvider: "openai" | "anthropic" | "gemini" | "perplexity";
+  llmProvider: "openai" | "anthropic" | "gemini";
   llmModel: string;
   queryText: string;
   queryCategory: LlmQueryCategory;

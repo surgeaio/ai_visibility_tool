@@ -4,43 +4,38 @@
  * Execution priority:
  *   1. OpenRouter (OPENROUTER_API_KEY) — single key for ChatGPT, Claude, Gemini
  *   2. Direct provider SDK — fallback when OPENROUTER_API_KEY is absent
- *
- * Perplexity is always called directly (not available on standard OpenRouter plans).
  */
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { OPENROUTER_BASE_URL } from "@/lib/ai/openrouter-client";
 
-export type LLMPlatform = "chatgpt" | "claude" | "gemini" | "perplexity";
+export type LLMPlatform = "chatgpt" | "claude" | "gemini";
 
 export const ENABLED_PLATFORMS: LLMPlatform[] = [
   "chatgpt",
   "claude",
   "gemini",
-  "perplexity",
 ];
 
 export const PLATFORM_LABELS: Record<LLMPlatform, string> = {
   chatgpt:    "ChatGPT",
   claude:     "Claude",
   gemini:     "Gemini",
-  perplexity: "Perplexity",
 };
 
 /** Bare model names used for direct provider SDK calls (fallback path). */
 export const PLATFORM_MODELS: Record<LLMPlatform, string> = {
   chatgpt:    "gpt-4o-mini",
   claude:     "claude-haiku-4-5",
-  gemini:     "gemini-1.5-flash",
-  perplexity: "sonar",
+  gemini:     "gemini-2.5-flash",
 };
 
 /** OpenRouter model IDs (provider-prefixed) for the primary execution path. */
-const OPENROUTER_PLATFORM_MODELS: Record<Exclude<LLMPlatform, "perplexity">, string> = {
+const OPENROUTER_PLATFORM_MODELS: Record<LLMPlatform, string> = {
   chatgpt: "openai/gpt-4o-mini",
   claude:  "anthropic/claude-sonnet-4",
-  gemini:  "google/gemini-2.5-flash-preview",
+  gemini:  "google/gemini-2.5-flash",
 };
 
 export interface LLMSuccess {
@@ -83,51 +78,6 @@ export async function callLLM(
   prompt: string,
 ): Promise<LLMResult> {
   try {
-    // -----------------------------------------------------------------------
-    // Perplexity — direct API only (not on OpenRouter standard plans)
-    // -----------------------------------------------------------------------
-    if (platform === "perplexity") {
-      const key = process.env.PERPLEXITY_API_KEY?.trim();
-      if (!key) {
-        throw new Error("PERPLEXITY_API_KEY is not configured");
-      }
-      const model = PLATFORM_MODELS.perplexity;
-      const res = await fetch("https://api.perplexity.ai/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: prompt },
-          ],
-          max_tokens: 1200,
-        }),
-        signal: AbortSignal.timeout(TIMEOUT_MS),
-      });
-      if (!res.ok) {
-        const body = await res.text().catch(() => res.statusText);
-        throw new Error(`Perplexity ${res.status}: ${body}`);
-      }
-      const json = (await res.json()) as {
-        choices?: Array<{ message?: { content?: string } }>;
-        citations?: string[];
-        usage?: { prompt_tokens?: number; completion_tokens?: number };
-      };
-      const text = json.choices?.[0]?.message?.content ?? "";
-      const sources = (json.citations ?? []).map((url) => ({ url }));
-      const tokensUsed =
-        (json.usage?.prompt_tokens ?? 0) + (json.usage?.completion_tokens ?? 0);
-      console.log(`[llm-providers] perplexity OK (${text.length} chars)`);
-      return { platform, model, text, sources, tokensUsed, ok: true };
-    }
-
-    // -----------------------------------------------------------------------
-    // ChatGPT / Claude / Gemini — OpenRouter first, direct SDK as fallback
-    // -----------------------------------------------------------------------
     const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
 
     if (openrouterKey) {
@@ -241,10 +191,6 @@ export function getAvailablePlatforms(
 ): LLMPlatform[] {
   const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY?.trim());
   return requested.filter((p) => {
-    if (p === "perplexity") {
-      return Boolean(process.env.PERPLEXITY_API_KEY?.trim());
-    }
-    // chatgpt / claude / gemini — available via OpenRouter OR direct key
     if (hasOpenRouter) return true;
     switch (p) {
       case "chatgpt": return Boolean(process.env.OPENAI_API_KEY?.trim());

@@ -26,12 +26,5 @@ export function extractCitations(
   responseText: string,
   providedCitations: Citation[],
 ): Citation[] {
-  if (provider === "perplexity" && providedCitations.length > 0) {
-    return providedCitations.map((c, index) => ({
-      ...c,
-      domain: normalizeDomain(c.url),
-      position: index + 1,
-    }));
-  }
   return extractCitationsFromText(responseText);
 }

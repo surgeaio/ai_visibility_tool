@@ -4,7 +4,6 @@ export type LlmVisibilityTrendPoint = {
   chatgpt: number;
   claude: number;
   gemini: number;
-  perplexity: number;
 };
 
 export type LlmVisibilityPayload = {

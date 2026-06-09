@@ -204,8 +204,8 @@ export const CIRCLE_HEALTHCARE_SAMPLE_REPORT: BrandAuditReport = {
     {
       brandName: "Circle Healthcare",
       brandUrl: "https://circle.healthcare",
-      llmProvider: "perplexity",
-      llmModel: "sonar",
+      llmProvider: "gemini",
+      llmModel: "gemini-2.5-flash",
       queryText: "Best chronic care management software for physician groups in 2024",
       queryCategory: "category",
       brandMentioned: true,

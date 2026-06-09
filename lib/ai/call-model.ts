@@ -3,7 +3,7 @@ import { VISIBILITY_MODELS } from "@/lib/ai/models";
 
 export interface AICallResult {
   success: boolean;
-  modelSlug: string;   // "chatgpt" | "claude" | "gemini" | "perplexity"
+  modelSlug: string;   // "chatgpt" | "claude" | "gemini"
   modelId: string;     // actual OpenRouter model ID, e.g. "meta-llama/llama-4-maverick:free"
   responseText: string;
   tokensUsed?: number;
@@ -15,7 +15,7 @@ const TIMEOUT_MS = 60_000;
 /**
  * Call a single model via OpenRouter.
  *
- * @param modelSlug  DB slug ("chatgpt", "claude", "gemini", "perplexity")
+ * @param modelSlug  DB slug ("chatgpt", "claude", "gemini")
  * @param prompt     User prompt text
  * @param options    Optional overrides for tokens, temperature, system prompt, api key
  */

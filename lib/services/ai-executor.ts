@@ -11,7 +11,7 @@ import {
   type LLMPlatform,
 } from "@/lib/ai/llm-providers";
 
-export type AIModelName = "chatgpt" | "claude" | "gemini" | "perplexity";
+export type AIModelName = "chatgpt" | "claude" | "gemini";
 
 export interface AIModelResponse {
   model: AIModelName;
@@ -30,7 +30,7 @@ export interface AIModelResponse {
  */
 export async function runPromptOnAllModels(
   prompt: string,
-  models: AIModelName[] = ["chatgpt", "claude", "gemini", "perplexity"],
+  models: AIModelName[] = ["chatgpt", "claude", "gemini"],
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
   _userId?: string,
 ): Promise<AIModelResponse[]> {

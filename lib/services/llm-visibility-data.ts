@@ -15,7 +15,6 @@ const MODEL_LABELS: Record<string, string> = {
   chatgpt: "ChatGPT",
   claude: "Claude",
   gemini: "Gemini",
-  perplexity: "Perplexity",
 };
 
 export function modelLabelFromSlug(slug: string): string {
@@ -91,10 +90,9 @@ export async function loadVisibilityPerfRows(
     .gte("created_at", fromIso);
 
   if (!respCountErr && (recentResponseCount ?? 0) > 0) {
-    console.log(
-      `[llm-visibility-data] skipping stale llm_brand_performance — ${recentResponseCount} chat_responses in range but 0 chat_analysis`,
+    console.warn(
+      `[llm-visibility-data] ${recentResponseCount} chat_responses in range but 0 chat_analysis — falling back to llm_brand_performance`,
     );
-    return [];
   }
 
   const { data: perfRows, error: perfError } = await db

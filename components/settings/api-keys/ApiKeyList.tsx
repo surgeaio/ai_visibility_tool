@@ -9,7 +9,6 @@ const PROVIDER_LABEL: Record<string, string> = {
   openai: "ChatGPT (OpenAI)",
   anthropic: "Claude (Anthropic)",
   gemini: "Gemini (Google)",
-  perplexity: "Perplexity",
   google_search_console: "Google Search Console",
   google_analytics: "Google Analytics",
 };

@@ -5,7 +5,7 @@ import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, X
 export function VisibilityTrendChart({
   data,
 }: {
-  data: { day: string; chatgpt: number; claude: number; gemini: number; perplexity: number }[];
+  data: { day: string; chatgpt: number; claude: number; gemini: number }[];
 }) {
   const isPlaceholder =
     !data?.length || (data.length === 1 && data[0]?.day === "—");
@@ -30,7 +30,6 @@ export function VisibilityTrendChart({
           <Line type="monotone" dataKey="chatgpt" name="ChatGPT" stroke="#22c55e" strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="claude" name="Claude" stroke="#a78bfa" strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="gemini" name="Gemini" stroke="#38bdf8" strokeWidth={2} dot={false} />
-          <Line type="monotone" dataKey="perplexity" name="Perplexity" stroke="#f97316" strokeWidth={2} dot={false} />
         </LineChart>
       </ResponsiveContainer>
     </div>

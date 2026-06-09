@@ -272,7 +272,7 @@ export const DEMO_CITATIONS = [
     brandId: DEMO_BRAND_ID,
     domain: "attio.com",
     url: "https://www.attio.com",
-    model: "perplexity",
+    model: "gemini",
     createdAt: "2026-05-10T13:20:00Z",
   },
   {
@@ -388,7 +388,6 @@ export type UserApiKeyProvider =
   | "openai"
   | "anthropic"
   | "gemini"
-  | "perplexity"
   | "google_search_console"
   | "google_analytics";
 
@@ -459,10 +458,10 @@ export const DEMO_LLM_PLATFORM_SCORES = [
 ];
 
 export const DEMO_LLM_TREND = [
-  { day: "May 1", chatgpt: 78, claude: 62, gemini: 65, perplexity: 58 },
-  { day: "May 5", chatgpt: 80, claude: 64, gemini: 68, perplexity: 60 },
-  { day: "May 10", chatgpt: 83, claude: 66, gemini: 70, perplexity: 62 },
-  { day: "May 12", chatgpt: 85, claude: 68, gemini: 71, perplexity: 64 },
+  { day: "May 1", chatgpt: 78, claude: 62, gemini: 65 },
+  { day: "May 5", chatgpt: 80, claude: 64, gemini: 68 },
+  { day: "May 10", chatgpt: 83, claude: 66, gemini: 70 },
+  { day: "May 12", chatgpt: 85, claude: 68, gemini: 71 },
 ];
 
 export const DEMO_GOOGLE_SUMMARY = {
