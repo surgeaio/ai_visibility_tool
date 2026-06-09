@@ -1,9 +1,6 @@
 /**
  * Visibility pipeline executor.
- *
- * Routes all calls through OpenRouter (OPENROUTER_API_KEY).
- * Direct provider keys (OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY)
- * are used as fallback only when OPENROUTER_API_KEY is absent.
+ * Uses direct provider APIs (OPENAI_API_KEY, ANTHROPIC_API_KEY, GEMINI_API_KEY / GOOGLE_API_KEY).
  */
 import {
   callMultiplePlatforms,
@@ -51,7 +48,7 @@ export async function runPromptOnAllModels(
       responseText: "",
       sources: [],
       error:
-        "No LLM API keys configured. Add OPENROUTER_API_KEY in Vercel → Settings → Environment Variables (recommended), or individual provider keys OPENAI_API_KEY / ANTHROPIC_API_KEY / GOOGLE_API_KEY.",
+        "No LLM API keys configured. Add OPENAI_API_KEY, ANTHROPIC_API_KEY, and GEMINI_API_KEY (or GOOGLE_API_KEY) in Vercel → Settings → Environment Variables.",
       status: "failed" as const,
     }));
   }
@@ -71,7 +68,7 @@ export async function runPromptOnAllModels(
         model,
         responseText: "",
         sources: [],
-        error: `API key not configured for ${model}. Add OPENROUTER_API_KEY in Vercel → Settings → Environment Variables.`,
+        error: `API key not configured for ${model}. Add the provider API key in Vercel → Settings → Environment Variables.`,
         status: "failed" as const,
       };
     }

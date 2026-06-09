@@ -2,38 +2,31 @@ import type { AIModelKey, AnalysisResult, SentimentResult } from "./types";
 import { analyzeSentiment } from "./sentiment";
 import { detectPatterns } from "./recommendations";
 import { isDemoMode } from "@/lib/config";
-import { createOpenRouterClient } from "@/lib/ai/openrouter-client";
-import { AI_MODELS } from "@/lib/ai/models";
+import { getLlmProviderInstance } from "@/lib/ai/llm-provider-factory";
+import type { LlmKeyProviderName } from "@/lib/ai/llm-provider-factory";
 
 export type { AIModelKey } from "./types";
 
-/**
- * Query an AI model exclusively through OpenRouter.
- * Returns empty string when no key is configured so callers can fall
- * through to demo mode gracefully instead of crashing.
- */
+const MODEL_TO_PROVIDER: Record<AIModelKey, LlmKeyProviderName> = {
+  openai: "openai",
+  anthropic: "anthropic",
+};
+
 async function queryAIModel(model: AIModelKey, prompt: string): Promise<string> {
-  const client = createOpenRouterClient(null, 45_000);
-  if (!client) {
-    // No OPENROUTER_API_KEY — caller should use demo/fallback path
-    return "";
-  }
-
+  const providerName = MODEL_TO_PROVIDER[model];
   try {
-    const openrouterModel =
-      model === "openai" ? AI_MODELS.openai
-      : model === "anthropic" ? AI_MODELS.claude
-      : AI_MODELS.gemini;
-
-    const res = await client.chat.completions.create({
-      model: openrouterModel,
-      messages: [{ role: "user", content: prompt }],
+    const provider = getLlmProviderInstance(providerName);
+    const response = await provider.execute(prompt, {
+      requestId: `analyzer-${model}`,
       temperature: 0.4,
-      max_tokens: 1200,
+      maxTokens: 1200,
     });
-    return res.choices[0]?.message?.content ?? "";
+    return response.rawResponse;
   } catch (err) {
-    console.error(`[analyzer] queryAIModel(${model}) failed:`, err instanceof Error ? err.message : err);
+    console.error(
+      `[analyzer] queryAIModel(${model}) failed:`,
+      err instanceof Error ? err.message : err,
+    );
     return "";
   }
 }

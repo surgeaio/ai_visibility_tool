@@ -1,8 +1,4 @@
 import Anthropic from "@anthropic-ai/sdk";
-import {
-  createOpenRouterClient,
-  hasOpenRouter,
-} from "@/lib/ai/openrouter-client";
 import { AI_MODELS } from "@/lib/ai/models";
 import { tryCreateAdminSupabaseClient } from "@/lib/supabase/admin";
 
@@ -14,10 +10,9 @@ function requireAdmin() {
 
 export async function generateVisibilityRecommendationsForBrand(brandId: string) {
   const supabase = requireAdmin();
-  const useOpenRouter = hasOpenRouter();
   const directKey = process.env.ANTHROPIC_API_KEY?.trim();
-  if (!useOpenRouter && !directKey) {
-    throw new Error("OPENROUTER_API_KEY or ANTHROPIC_API_KEY required for recommendations");
+  if (!directKey) {
+    throw new Error("ANTHROPIC_API_KEY required for recommendations");
   }
 
   const { data: brand } = await supabase
@@ -100,27 +95,19 @@ Return ONLY valid JSON (no markdown):
 }`;
 
   let rawText = "";
-  if (useOpenRouter) {
-    const client = createOpenRouterClient(null, 60_000);
-    if (!client) throw new Error("OpenRouter client unavailable");
-    const completion = await client.chat.completions.create({
-      model: AI_MODELS.claude,
-      max_tokens: 3000,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-    rawText = completion.choices[0]?.message?.content ?? "";
-  } else {
-    const anthropic = new Anthropic({ apiKey: directKey! });
-    const message = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
-      max_tokens: 3000,
-      messages: [{ role: "user", content: userPrompt }],
-    });
-    rawText = message.content
-      .filter((b) => b.type === "text")
-      .map((b) => ("text" in b ? b.text : ""))
-      .join("\n");
-  }
+  const anthropic = new Anthropic({
+    apiKey: directKey,
+    baseURL: "https://api.anthropic.com",
+  });
+  const message = await anthropic.messages.create({
+    model: AI_MODELS.claude,
+    max_tokens: 3000,
+    messages: [{ role: "user", content: userPrompt }],
+  });
+  rawText = message.content
+    .filter((b) => b.type === "text")
+    .map((b) => ("text" in b ? b.text : ""))
+    .join("\n");
 
   const raw = rawText.replace(/^```json\s*/i, "").replace(/```$/i, "").trim();
 

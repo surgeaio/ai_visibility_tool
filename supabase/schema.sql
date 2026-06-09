@@ -365,7 +365,6 @@ create table if not exists user_api_keys (
       'openai',
       'anthropic',
       'gemini',
-      'perplexity',
       'google_search_console',
       'google_analytics'
     )
@@ -406,8 +405,7 @@ insert into llm_platforms (name, display_name)
 values
   ('chatgpt', 'ChatGPT'),
   ('claude', 'Claude'),
-  ('gemini', 'Gemini'),
-  ('perplexity', 'Perplexity')
+  ('gemini', 'Gemini')
 on conflict (name) do nothing;
 
 create table if not exists llm_brand_performance (

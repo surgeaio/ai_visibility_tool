@@ -1,14 +1,11 @@
 /**
  * Unified LLM dispatcher for the visibility pipeline.
- *
- * Execution priority:
- *   1. OpenRouter (OPENROUTER_API_KEY) — single key for ChatGPT, Claude, Gemini
- *   2. Direct provider SDK — fallback when OPENROUTER_API_KEY is absent
+ * Uses direct provider APIs only (no OpenRouter).
  */
 import OpenAI from "openai";
 import Anthropic from "@anthropic-ai/sdk";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { OPENROUTER_BASE_URL } from "@/lib/ai/openrouter-client";
+import { PRODUCTION_MODELS } from "@/lib/ai/models";
 
 export type LLMPlatform = "chatgpt" | "claude" | "gemini";
 
@@ -19,23 +16,15 @@ export const ENABLED_PLATFORMS: LLMPlatform[] = [
 ];
 
 export const PLATFORM_LABELS: Record<LLMPlatform, string> = {
-  chatgpt:    "ChatGPT",
-  claude:     "Claude",
-  gemini:     "Gemini",
+  chatgpt: "ChatGPT",
+  claude: "Claude",
+  gemini: "Gemini",
 };
 
-/** Bare model names used for direct provider SDK calls (fallback path). */
 export const PLATFORM_MODELS: Record<LLMPlatform, string> = {
-  chatgpt:    "gpt-4o-mini",
-  claude:     "claude-haiku-4-5",
-  gemini:     "gemini-2.5-flash",
-};
-
-/** OpenRouter model IDs (provider-prefixed) for the primary execution path. */
-const OPENROUTER_PLATFORM_MODELS: Record<LLMPlatform, string> = {
-  chatgpt: "openai/gpt-4o-mini",
-  claude:  "anthropic/claude-sonnet-4",
-  gemini:  "google/gemini-2.5-flash",
+  chatgpt: PRODUCTION_MODELS.chatgpt,
+  claude: PRODUCTION_MODELS.claude,
+  gemini: PRODUCTION_MODELS.gemini,
 };
 
 export interface LLMSuccess {
@@ -61,16 +50,12 @@ const SYSTEM_PROMPT =
 
 const TIMEOUT_MS = 45_000;
 
-function buildOpenRouterClient(apiKey: string): OpenAI {
-  return new OpenAI({
-    apiKey,
-    baseURL: OPENROUTER_BASE_URL,
-    timeout: TIMEOUT_MS,
-    defaultHeaders: {
-      "HTTP-Referer": process.env.NEXT_PUBLIC_APP_URL || process.env.APP_URL || "http://localhost:3000",
-      "X-Title": "AI Visibility Tool",
-    },
-  });
+function resolveGeminiApiKey(): string | undefined {
+  return (
+    process.env.GEMINI_API_KEY?.trim() ||
+    process.env.GOOGLE_API_KEY?.trim() ||
+    process.env.GOOGLE_AI_API_KEY?.trim()
+  );
 }
 
 export async function callLLM(
@@ -78,37 +63,20 @@ export async function callLLM(
   prompt: string,
 ): Promise<LLMResult> {
   try {
-    const openrouterKey = process.env.OPENROUTER_API_KEY?.trim();
-
-    if (openrouterKey) {
-      const openrouterModel = OPENROUTER_PLATFORM_MODELS[platform];
-      const client = buildOpenRouterClient(openrouterKey);
-      const res = await client.chat.completions.create({
-        model: openrouterModel,
-        messages: [
-          { role: "system", content: SYSTEM_PROMPT },
-          { role: "user", content: prompt },
-        ],
-        max_tokens: 1200,
-        temperature: 0.3,
-      });
-      const text = res.choices[0]?.message?.content ?? "";
-      const tokensUsed = res.usage?.total_tokens;
-      console.log(`[llm-providers] ${platform} via OpenRouter OK (${text.length} chars)`);
-      return { platform, model: openrouterModel, text, sources: [], tokensUsed, ok: true };
-    }
-
-    // Direct provider SDK fallback
     switch (platform) {
       case "chatgpt": {
         const key = process.env.OPENAI_API_KEY?.trim();
         if (!key) {
           throw new Error(
-            "No OPENROUTER_API_KEY or OPENAI_API_KEY configured. Add OPENROUTER_API_KEY in Vercel → Settings → Environment Variables.",
+            "OPENAI_API_KEY is not configured. Add it in Vercel → Settings → Environment Variables.",
           );
         }
         const model = PLATFORM_MODELS.chatgpt;
-        const client = new OpenAI({ apiKey: key, timeout: TIMEOUT_MS });
+        const client = new OpenAI({
+          apiKey: key,
+          baseURL: "https://api.openai.com/v1",
+          timeout: TIMEOUT_MS,
+        });
         const res = await client.chat.completions.create({
           model,
           messages: [
@@ -128,11 +96,15 @@ export async function callLLM(
         const key = process.env.ANTHROPIC_API_KEY?.trim();
         if (!key) {
           throw new Error(
-            "No OPENROUTER_API_KEY or ANTHROPIC_API_KEY configured. Add OPENROUTER_API_KEY in Vercel → Settings → Environment Variables.",
+            "ANTHROPIC_API_KEY is not configured. Add it in Vercel → Settings → Environment Variables.",
           );
         }
         const model = PLATFORM_MODELS.claude;
-        const client = new Anthropic({ apiKey: key, timeout: TIMEOUT_MS });
+        const client = new Anthropic({
+          apiKey: key,
+          baseURL: "https://api.anthropic.com",
+          timeout: TIMEOUT_MS,
+        });
         const res = await client.messages.create({
           model,
           max_tokens: 1200,
@@ -149,12 +121,10 @@ export async function callLLM(
       }
 
       case "gemini": {
-        const key =
-          process.env.GOOGLE_API_KEY?.trim() ||
-          process.env.GOOGLE_AI_API_KEY?.trim();
+        const key = resolveGeminiApiKey();
         if (!key) {
           throw new Error(
-            "No OPENROUTER_API_KEY or GOOGLE_API_KEY configured. Add OPENROUTER_API_KEY in Vercel → Settings → Environment Variables.",
+            "GEMINI_API_KEY or GOOGLE_API_KEY is not configured. Add it in Vercel → Settings → Environment Variables.",
           );
         }
         const model = PLATFORM_MODELS.gemini;
@@ -182,22 +152,17 @@ export async function callLLM(
   }
 }
 
-/**
- * Returns platforms that are executable — either via OpenRouter or their direct key.
- * When OPENROUTER_API_KEY is set, chatgpt/claude/gemini are all available.
- */
 export function getAvailablePlatforms(
   requested: LLMPlatform[] = ENABLED_PLATFORMS,
 ): LLMPlatform[] {
-  const hasOpenRouter = Boolean(process.env.OPENROUTER_API_KEY?.trim());
   return requested.filter((p) => {
-    if (hasOpenRouter) return true;
     switch (p) {
-      case "chatgpt": return Boolean(process.env.OPENAI_API_KEY?.trim());
-      case "claude":  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
-      case "gemini":  return Boolean(
-        process.env.GOOGLE_API_KEY?.trim() || process.env.GOOGLE_AI_API_KEY?.trim(),
-      );
+      case "chatgpt":
+        return Boolean(process.env.OPENAI_API_KEY?.trim());
+      case "claude":
+        return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+      case "gemini":
+        return Boolean(resolveGeminiApiKey());
     }
   });
 }

@@ -40,14 +40,14 @@ const MODELS = ["chatgpt", "claude", "gemini"] as const;
 type SelldoModel = typeof MODELS[number];
 
 // ─── Per-model visibility for sell.do ────────────────────────────────────────
-// chatgpt: 8%, claude: 6%, gemini: 14%, perplexity: ~22% (Google AI Overviews proxy)
+// chatgpt: 8%, claude: 6%, gemini: 14%
 const MODEL_VIS: Record<SelldoModel, number> = {
   chatgpt: 8,
   claude: 6,
   gemini: 14,
 };
 
-// Sell.do mentioned: ~1/15 for chatgpt, ~1/15 for claude, ~2/15 for gemini, ~3/15 for perplexity
+// Sell.do mentioned: ~1/15 for chatgpt, ~1/15 for claude, ~2/15 for gemini
 const SELLDO_MENTIONED_CHATGPT = new Set([0, 9]); // "best real estate crm", "best crm for indian real estate"
 const SELLDO_MENTIONED_CLAUDE = new Set([8]); // "sell.do review"
 const SELLDO_MENTIONED_GEMINI = new Set([0, 5, 8, 9, 14]); // 5 prompts → 5/15 = 33% (normalized to ~14% avg)
@@ -586,7 +586,7 @@ export async function seedSellDoDemoData(brandId: string): Promise<SellDoSeedRes
       {
         recommendation_type: "content_gap" as const,
         title: "Close ChatGPT visibility gap (8% → 20%)",
-        description: "ChatGPT visibility is the weakest channel at 8% vs 22% on Perplexity. Create structured comparison content, FAQ schema, and product schema markup targeting ChatGPT crawl patterns.",
+        description: "ChatGPT visibility is the weakest channel at 8%. Create structured comparison content, FAQ schema, and product schema markup targeting ChatGPT crawl patterns.",
         action_items: ["Publish FAQ-rich content for all 15 tracked prompts with structured data markup", "Create a dedicated 'ChatGPT vs Real Estate CRM' educational content series", "Submit Sell.do to Product Hunt, G2, and SoftwareSuggest to increase AI-indexed citations"],
         priority: "high" as const, impact_score: 85,
       },

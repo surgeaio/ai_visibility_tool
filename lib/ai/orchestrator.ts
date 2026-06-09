@@ -67,7 +67,7 @@ export async function executePromptAcrossModels(params: {
       }
       const model = shouldUseCheaperModel(providerName)
         ? providerName === "openai"
-          ? "gpt-4o-mini"
+          ? "gpt-3.5-turbo"
           : options.model
         : options.model;
       const cacheKey = makeAICacheKey({

@@ -184,7 +184,6 @@ export const DEMO_MODEL_COVERAGE = [
   { model: "ChatGPT", visibility: 68 },
   { model: "Gemini", visibility: 52 },
   { model: "Claude", visibility: 71 },
-  { model: "Perplexity", visibility: 59 },
 ];
 
 export const DEMO_SENTIMENT_DIST = {
@@ -454,7 +453,6 @@ export const DEMO_LLM_PLATFORM_SCORES = [
   { platform: "ChatGPT", score: 85, sentiment: "positive" as const },
   { platform: "Claude", score: 68, sentiment: "positive" as const },
   { platform: "Gemini", score: 71, sentiment: "neutral" as const },
-  { platform: "Perplexity", score: 64, sentiment: "negative" as const },
 ];
 
 export const DEMO_LLM_TREND = [
@@ -542,19 +540,10 @@ export const DEMO_LLM_PROMPT_DETAILS: Record<
         sentimentScore: 78,
         excerpt: "Attio stands out for flexibility and a fast UI compared with legacy CRMs...",
       },
-      {
-        platform: "Perplexity",
-        position: null,
-        mentioned: false,
-        sentimentLabel: "Not mentioned",
-        sentimentScore: null,
-        excerpt: "",
-        gap: "The answer cited HubSpot, Salesforce, and Pipedrive from G2-style sources instead.",
-      },
     ],
     recommendations: [
       "Add a comparison page: your brand vs HubSpot for startup buyers.",
-      "Improve third-party presence (G2, Capterra) so Perplexity can cite you.",
+      "Improve third-party presence (G2, Capterra) so AI assistants can cite you.",
       "Publish a startup-focused landing page that answers this exact question.",
     ],
   },
@@ -583,14 +572,6 @@ export const DEMO_LLM_PROMPT_DETAILS: Record<
         sentimentLabel: "Neutral",
         sentimentScore: 72,
         excerpt: "The response lists several CRMs; Attio is mentioned mid-list with balanced pros and cons.",
-      },
-      {
-        platform: "Perplexity",
-        position: 6,
-        mentioned: true,
-        sentimentLabel: "Mixed",
-        sentimentScore: 55,
-        excerpt: "Citations lean toward large vendors; your brand is mentioned briefly near the end.",
       },
     ],
     recommendations: [

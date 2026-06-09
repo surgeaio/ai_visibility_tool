@@ -1,45 +1,31 @@
 import OpenAI from "openai";
 import { assertLlmKeyOrAllowDemo } from "@/lib/ai/llm-execution-policy";
-import {
-  createOpenRouterClient,
-  hasOpenRouter,
-  isOpenRouterKey,
-} from "@/lib/ai/openrouter-client";
-import { AI_MODELS, resolveOpenRouterModel } from "@/lib/ai/models";
+import { AI_MODELS } from "@/lib/ai/models";
 import { AIProvider } from "@/lib/ai/providers/base.provider";
 import type { AIExecuteOptions, AIResponse } from "@/lib/ai/types";
 
 export class OpenAIProvider extends AIProvider {
   readonly name = "openai" as const;
   readonly weight = 40;
-  readonly defaultModel = "gpt-4o";
+  readonly defaultModel = "gpt-3.5-turbo";
 
   async execute(prompt: string, options: AIExecuteOptions): Promise<AIResponse> {
     const started = Date.now();
-    const overrideKey = options.apiKey?.trim();
-    const useOpenRouter =
-      isOpenRouterKey(overrideKey) || (!overrideKey && hasOpenRouter());
+    const apiKey = options.apiKey?.trim() || process.env.OPENAI_API_KEY?.trim();
 
-    const directKey = useOpenRouter ? undefined : overrideKey || process.env.OPENAI_API_KEY;
-    const effectiveKey = useOpenRouter
-      ? overrideKey || process.env.OPENROUTER_API_KEY
-      : directKey;
+    assertLlmKeyOrAllowDemo(this.name, apiKey);
 
-    assertLlmKeyOrAllowDemo(this.name, effectiveKey);
+    const model = options.model ?? this.defaultModel;
 
-    const model = useOpenRouter
-      ? resolveOpenRouterModel("openai", options.model)
-      : options.model ?? this.defaultModel;
-
-    if (!effectiveKey) {
+    if (!apiKey) {
       return this.demoResponse(prompt, model, options, started);
     }
 
-    const client = useOpenRouter
-      ? createOpenRouterClient(overrideKey, options.timeoutMs ?? 30_000)
-      : new OpenAI({ apiKey: effectiveKey, timeout: options.timeoutMs ?? 30_000 });
-
-    if (!client) return this.demoResponse(prompt, model, options, started);
+    const client = new OpenAI({
+      apiKey,
+      baseURL: "https://api.openai.com/v1",
+      timeout: options.timeoutMs ?? 30_000,
+    });
 
     const response = await client.chat.completions.create({
       model,
@@ -69,13 +55,16 @@ export class OpenAIProvider extends AIProvider {
   }
 
   async healthCheck(): Promise<boolean> {
-    return Boolean(
-      process.env.OPENROUTER_API_KEY?.trim() || process.env.OPENAI_API_KEY?.trim(),
-    );
+    return Boolean(process.env.OPENAI_API_KEY?.trim());
   }
 
   estimateCost(inputTokens: number, outputTokens: number, model?: string): number {
     const m = (model ?? this.defaultModel).toLowerCase();
+    if (m.includes("gpt-3.5")) {
+      const inputCost = (inputTokens / 1_000_000) * 0.5;
+      const outputCost = (outputTokens / 1_000_000) * 1.5;
+      return Number((inputCost + outputCost).toFixed(6));
+    }
     if (m.includes("gpt-4o-mini") || m.includes("4o-mini")) {
       const inputCost = (inputTokens / 1_000_000) * 0.15;
       const outputCost = (outputTokens / 1_000_000) * 0.6;

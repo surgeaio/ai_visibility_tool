@@ -4,14 +4,12 @@ import { getLlmProviderInstance } from "@/lib/ai/llm-provider-factory";
 import type { BrandQueryDefinition } from "@/lib/brand-audit/query-sets";
 import type { LlmQueryCategory, LlmSentiment, LlmVisibilityQueryResult } from "@/lib/brand-audit/types";
 import { calculateQueryVisibilityScore } from "@/lib/utils/score-calculator";
-import { hasAnthropic, hasOpenAI } from "@/lib/config";
-
-const hasOpenRouterEnv = () => Boolean(process.env.OPENROUTER_API_KEY?.trim());
+import { hasAnthropic, hasGemini, hasOpenAI } from "@/lib/config";
 
 const PROVIDER_ENV: Record<LlmKeyProviderName, () => boolean> = {
   openai: hasOpenAI,
   anthropic: hasAnthropic,
-  gemini: () => hasOpenRouterEnv() || Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
+  gemini: hasGemini,
 };
 
 const ALL_PROVIDERS: LlmKeyProviderName[] = ["openai", "anthropic", "gemini"];

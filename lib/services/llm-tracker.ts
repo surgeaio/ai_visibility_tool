@@ -319,7 +319,6 @@ export class LLMTracker {
       { platform: "ChatGPT", score: 85 },
       { platform: "Claude", score: 68 },
       { platform: "Gemini", score: 71 },
-      { platform: "Perplexity", score: 64 },
     ];
   }
 }

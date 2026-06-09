@@ -1,8 +1,4 @@
 import { getAdminClient } from "@/lib/services/competitors/access";
-import {
-  createOpenRouterClient,
-  hasOpenRouter,
-} from "@/lib/ai/openrouter-client";
 import { AI_MODELS } from "@/lib/ai/models";
 
 type GapRow = {
@@ -36,10 +32,9 @@ export async function generateCompetitorAnalysis(brandId: string) {
     return { generated: 0, reason: "No competitor rankings to analyze" };
   }
 
-  const useOpenRouter = hasOpenRouter();
   const apiKey = process.env.OPENAI_API_KEY?.trim();
-  if (!useOpenRouter && !apiKey) {
-    return { generated: 0, reason: "OPENROUTER_API_KEY or OPENAI_API_KEY not configured" };
+  if (!apiKey) {
+    return { generated: 0, reason: "OPENAI_API_KEY not configured" };
   }
 
   const byCompetitor = new Map<string, GapRow[]>();
@@ -55,40 +50,27 @@ export async function generateCompetitorAnalysis(brandId: string) {
     const prompt = buildPrompt(domain, queries);
 
     try {
-      let content: string | null = null;
-      if (useOpenRouter) {
-        const client = createOpenRouterClient(null, 60_000);
-        if (!client) throw new Error("OpenRouter client unavailable");
-        const completion = await client.chat.completions.create({
+      const res = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           model: AI_MODELS.openai,
           messages: [{ role: "user", content: prompt }],
           response_format: { type: "json_object" },
           temperature: 0.3,
-        });
-        content = completion.choices[0]?.message?.content ?? null;
-      } else {
-        const res = await fetch("https://api.openai.com/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            Authorization: `Bearer ${apiKey!}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "gpt-4o-mini",
-            messages: [{ role: "user", content: prompt }],
-            response_format: { type: "json_object" },
-            temperature: 0.3,
-          }),
-        });
-        if (!res.ok) {
-          console.error("[analyze] OpenAI failed:", await res.text());
-          continue;
-        }
-        const data = (await res.json()) as {
-          choices?: Array<{ message?: { content?: string } }>;
-        };
-        content = data.choices?.[0]?.message?.content ?? null;
+        }),
+      });
+      if (!res.ok) {
+        console.error("[analyze] OpenAI failed:", await res.text());
+        continue;
       }
+      const data = (await res.json()) as {
+        choices?: Array<{ message?: { content?: string } }>;
+      };
+      const content = data.choices?.[0]?.message?.content ?? null;
 
       if (!content) continue;
 
@@ -101,7 +83,7 @@ export async function generateCompetitorAnalysis(brandId: string) {
         winning_factors: analysis.winning_factors ?? [],
         action_items: analysis.action_items ?? [],
         raw_analysis: analysis.summary ?? "",
-        model_used: useOpenRouter ? AI_MODELS.openai : "gpt-4o-mini",
+        model_used: AI_MODELS.openai,
       });
 
       generated++;

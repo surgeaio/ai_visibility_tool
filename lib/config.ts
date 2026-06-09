@@ -1,18 +1,22 @@
-export function hasOpenRouterKey() {
-  return Boolean(process.env.OPENROUTER_API_KEY?.trim());
-}
-
 export function hasOpenAI() {
-  return hasOpenRouterKey() || Boolean(process.env.OPENAI_API_KEY?.trim());
+  return Boolean(process.env.OPENAI_API_KEY?.trim());
 }
 
 export function hasAnthropic() {
-  return hasOpenRouterKey() || Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+  return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+}
+
+export function hasGemini() {
+  return Boolean(
+    process.env.GEMINI_API_KEY?.trim() ||
+      process.env.GOOGLE_API_KEY?.trim() ||
+      process.env.GOOGLE_AI_API_KEY?.trim(),
+  );
 }
 
 /** Demo mode: no API keys — UI uses seeded data; APIs return mock analysis when keys missing */
 export function isDemoMode() {
-  return !hasOpenRouterKey() && !hasOpenAI() && !hasAnthropic();
+  return !hasOpenAI() && !hasAnthropic() && !hasGemini();
 }
 
 /**

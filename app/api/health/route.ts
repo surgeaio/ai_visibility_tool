@@ -23,13 +23,15 @@ export async function GET() {
   const envCheck = validateEnv();
   const supabaseOk = await checkSupabase();
 
-  const openRouter = Boolean(process.env.OPENROUTER_API_KEY?.trim());
   const providers = {
-    openrouter: openRouter,
-    openai:     openRouter || Boolean(process.env.OPENAI_API_KEY?.trim()),
-    anthropic:  openRouter || Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
-    google:     openRouter || Boolean(process.env.GOOGLE_AI_API_KEY?.trim()),
-    serper:     Boolean(process.env.SERPER_API_KEY?.trim()),
+    openai: Boolean(process.env.OPENAI_API_KEY?.trim()),
+    anthropic: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+    google: Boolean(
+      process.env.GEMINI_API_KEY?.trim() ||
+        process.env.GOOGLE_API_KEY?.trim() ||
+        process.env.GOOGLE_AI_API_KEY?.trim(),
+    ),
+    serper: Boolean(process.env.SERPER_API_KEY?.trim()),
   };
 
   const canRunPrompts = adminHasLlmProviders();

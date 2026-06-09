@@ -102,11 +102,11 @@ export async function POST(req: Request) {
         noAnalysis === "analysis_insert_failed"
           ? "LLM responses were saved but analysis could not be written. Click 'Re-analyze saved responses' or apply the latest Supabase migrations."
           : noAnalysis === "no_llm_keys"
-            ? "No LLM API keys configured. Add OPENROUTER_API_KEY (recommended — covers all models) in Vercel → Settings → Environment Variables and redeploy."
+            ? "No LLM API keys configured. Add OPENAI_API_KEY, ANTHROPIC_API_KEY, and GEMINI_API_KEY in Vercel → Settings → Environment Variables and redeploy."
             : noAnalysis === "model_errors"
-            ? "All configured models failed this run. Verify OPENROUTER_API_KEY is set correctly in Vercel → Settings → Environment Variables."
+            ? "All configured models failed this run. Verify provider API keys are set correctly in Vercel → Settings → Environment Variables."
             : noAnalysis === "no_llm_responses"
-              ? "No successful LLM responses. Verify OPENROUTER_API_KEY is set in Vercel → Settings → Environment Variables."
+              ? "No successful LLM responses. Verify OPENAI_API_KEY, ANTHROPIC_API_KEY, and GEMINI_API_KEY are set in Vercel → Settings → Environment Variables."
               : undefined,
       requestId,
     });

@@ -1,9 +1,5 @@
 import type { SentimentResult } from "./types";
 import OpenAI from "openai";
-import {
-  createOpenRouterClient,
-  hasOpenRouter,
-} from "@/lib/ai/openrouter-client";
 import { AI_MODELS } from "@/lib/ai/models";
 
 export async function analyzeSentiment(
@@ -11,10 +7,8 @@ export async function analyzeSentiment(
   brandName: string,
   opts?: { openAiApiKey?: string },
 ): Promise<SentimentResult> {
-  const overrideKey = opts?.openAiApiKey?.trim();
-  const useOpenRouter = !overrideKey && hasOpenRouter();
-  const key = overrideKey || (useOpenRouter ? null : process.env.OPENAI_API_KEY?.trim());
-  if (!useOpenRouter && !key) {
+  const key = opts?.openAiApiKey?.trim() || process.env.OPENAI_API_KEY?.trim();
+  if (!key) {
     const score = text.toLowerCase().includes("negative") || text.toLowerCase().includes("expensive")
       ? 38
       : text.toLowerCase().includes("praised") || text.toLowerCase().includes("best")
@@ -32,12 +26,12 @@ export async function analyzeSentiment(
     };
   }
 
-  const openai = useOpenRouter
-    ? createOpenRouterClient()
-    : new OpenAI({ apiKey: key! });
-  if (!openai) throw new Error("No LLM client available for sentiment analysis");
+  const openai = new OpenAI({
+    apiKey: key,
+    baseURL: "https://api.openai.com/v1",
+  });
   const response = await openai.chat.completions.create({
-    model: useOpenRouter ? AI_MODELS.openai : "gpt-4o",
+    model: AI_MODELS.openai,
     messages: [
       {
         role: "system",

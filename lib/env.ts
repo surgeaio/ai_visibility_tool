@@ -3,11 +3,6 @@
  *
  * Call `validateEnv()` at the top of long-running server processes or
  * in a startup health-check route to surface missing configuration early.
- *
- * Usage:
- *   import { validateEnv } from "@/lib/env";
- *   const { ok, warnings, errors } = validateEnv();
- *   if (!ok) console.error("Env validation failed:", errors);
  */
 
 export interface EnvValidationResult {
@@ -20,7 +15,6 @@ export function validateEnv(): EnvValidationResult {
   const errors: string[] = [];
   const warnings: string[] = [];
 
-  // ─── Required: Supabase ───────────────────────────────────────────────────
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL?.trim()) {
     errors.push("NEXT_PUBLIC_SUPABASE_URL is not set");
   }
@@ -31,28 +25,20 @@ export function validateEnv(): EnvValidationResult {
     errors.push("SUPABASE_SERVICE_ROLE_KEY is not set (required for admin operations)");
   }
 
-  // ─── Required: AI — at minimum one gateway ────────────────────────────────
-  const hasOpenRouter  = Boolean(process.env.OPENROUTER_API_KEY?.trim());
   const hasDirectOpenAI = Boolean(process.env.OPENAI_API_KEY?.trim());
   const hasDirectAnthropic = Boolean(process.env.ANTHROPIC_API_KEY?.trim());
   const hasDirectGemini = Boolean(
-    process.env.GOOGLE_API_KEY?.trim() || process.env.GOOGLE_AI_API_KEY?.trim(),
+    process.env.GEMINI_API_KEY?.trim() ||
+      process.env.GOOGLE_API_KEY?.trim() ||
+      process.env.GOOGLE_AI_API_KEY?.trim(),
   );
 
-  if (!hasOpenRouter) {
-    if (!hasDirectOpenAI && !hasDirectAnthropic && !hasDirectGemini) {
-      errors.push(
-        "No AI gateway configured. Set OPENROUTER_API_KEY (recommended) or at least one of OPENAI_API_KEY / ANTHROPIC_API_KEY / GOOGLE_API_KEY.",
-      );
-    } else {
-      warnings.push(
-        "OPENROUTER_API_KEY is not set. Falling back to direct provider keys. " +
-        "This means some models may be unavailable. Add OPENROUTER_API_KEY for full coverage.",
-      );
-    }
+  if (!hasDirectOpenAI && !hasDirectAnthropic && !hasDirectGemini) {
+    errors.push(
+      "No AI providers configured. Set at least one of OPENAI_API_KEY / ANTHROPIC_API_KEY / GEMINI_API_KEY (or GOOGLE_API_KEY).",
+    );
   }
 
-  // ─── Optional but recommended ─────────────────────────────────────────────
   if (!process.env.ENCRYPTION_KEY?.trim()) {
     warnings.push("ENCRYPTION_KEY is not set — per-user API key encryption is disabled.");
   }
@@ -62,7 +48,7 @@ export function validateEnv(): EnvValidationResult {
   }
 
   if (!process.env.NEXT_PUBLIC_APP_URL?.trim() && !process.env.APP_URL?.trim()) {
-    warnings.push("NEXT_PUBLIC_APP_URL is not set — OpenRouter HTTP-Referer header will default to localhost:3000.");
+    warnings.push("NEXT_PUBLIC_APP_URL is not set — some integrations may default to localhost:3000.");
   }
 
   return {
